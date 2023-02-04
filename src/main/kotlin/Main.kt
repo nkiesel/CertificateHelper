@@ -65,6 +65,7 @@ class CertificateHelper(name: String, args: Array<String>) {
     private val port by parser.option(ArgType.Int, shortName = "p", description = "server port").default(443)
     private val outputFormat by parser.option(ArgType.Choice<OutputFormat>(), shortName = "t", description = "Output format").default(OutputFormat.SUMMARY)
     private val output by parser.option(ArgType.String, shortName = "o", description = "Output (- for stdout)").default("-")
+    private val certIndex by parser.option(ArgType.Int, shortName = "c", description = "certificate index")
 
     private val s = StringWriter()
     private val writer = PrintWriter(s)
@@ -141,8 +142,10 @@ class CertificateHelper(name: String, args: Array<String>) {
 
         val chain = tm.chain
         if (chain != null) {
-            for (cert in chain) {
-                certificate(host, cert)
+            for (cert in chain.withIndex()) {
+                if (certIndex == null || certIndex == cert.index) {
+                    certificate(host, cert.value)
+                }
             }
         } else {
             info(host, "Could not obtain server certificate chain")
@@ -174,8 +177,10 @@ class CertificateHelper(name: String, args: Array<String>) {
     private fun chain(name: String, inputStream: InputStream) {
         inputStream.use { stream ->
             try {
-                for (cert in certificateFactory.generateCertificates(stream)) {
-                    certificate(name, cert)
+                for (cert in certificateFactory.generateCertificates(stream).withIndex()) {
+                    if (certIndex == null || certIndex == cert.index) {
+                        certificate(name, cert.value)
+                    }
                 }
             } catch (e: Exception) {
                 info(name, "Could not read as X509 certificate")

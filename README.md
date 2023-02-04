@@ -60,6 +60,10 @@ will print the summary of a Base64-encoded PEM chain stored in `config/dev.json`
 Note: for historical reasons, a key w/o any `.` will have `.tls.caBundleBase64` appended, and thus the above
 command could be shortened to `... -f config -i config/dev.json -k github`.
 
+If you are only interested in a single certificate instead of the whole certificate chain, then you can use the 
+`--certIndex` option to select that certificate. The leaf certificate always has index 0.  Thus, to only get the 
+leaf certificate from a server, add `-c 0`.
+
 Run `$JAVA_HOME/bin/java -jar CertificateHelper-1.0-uber.jar -h` to see all the options:
 ```text
 Options:
@@ -69,6 +73,7 @@ Options:
     --port, -p [443] -> server port { Int }
     --outputFormat, -t [SUMMARY] -> Output format { Value should be one of [pem, summary, base64, text] }
     --output, -o [-] -> Output (- for stdout) { String }
+    --certIndex, -c -> certificate index { Int }
     --help, -h -> Usage info
 ```
 
