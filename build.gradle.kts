@@ -1,18 +1,17 @@
 plugins {
     kotlin("jvm") version "1.8.10"
-    kotlin("plugin.serialization") version "1.8.10"
     application
 }
 
 group = "io.nkiesel"
-version = "1.1"
+version = "1.2"
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
+    implementation("com.github.ajalt.clikt:clikt:3.5.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
 }
 

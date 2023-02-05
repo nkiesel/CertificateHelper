@@ -1,7 +1,6 @@
 import java.io.InputStream
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.nio.file.Path
 import java.security.MessageDigest
 import java.security.cert.Certificate
 import java.security.cert.CertificateFactory
@@ -12,7 +11,6 @@ import javax.naming.ldap.LdapName
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLException
 import javax.net.ssl.SSLSocket
-import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.X509TrustManager
 import kotlin.io.path.Path
 import kotlin.io.path.inputStream
@@ -20,11 +18,14 @@ import kotlin.io.path.isReadable
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
-import kotlinx.cli.ArgParser
-import kotlinx.cli.ArgType
-import kotlinx.cli.default
-import kotlinx.cli.multiple
-import kotlinx.cli.required
+import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.context
+import com.github.ajalt.clikt.output.CliktHelpFormatter
+import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.split
+import com.github.ajalt.clikt.parameters.types.enum
+import com.github.ajalt.clikt.parameters.types.int
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
@@ -52,25 +53,32 @@ enum class OutputFormat {
 }
 
 fun main(args: Array<String>) {
-    CertificateHelper(System.getProperty("sun.java.command") ?: "CertificateHelper", args)
+    CertificateHelper().main(args)
 }
 
-class CertificateHelper(name: String, args: Array<String>) {
-    private val parser = ArgParser(name)
-    private val inputFormat by parser.option(ArgType.Choice<InputFormat>(), shortName = "f", description = "Input format").default(InputFormat.SERVER)
-    private val input by parser.option(ArgType.String, shortName = "i", description = "Input").required()
-    private val key by parser.option(ArgType.String, shortName = "k", description = "Config key")
-    private val port by parser.option(ArgType.Int, shortName = "p", description = "server port").default(443)
-    private val outputFormat by parser.option(ArgType.Choice<OutputFormat>(), shortName = "t", description = "Output format").default(OutputFormat.SUMMARY)
-    private val output by parser.option(ArgType.String, shortName = "o", description = "Output (- for stdout)").default("-")
-    private val certIndex by parser.option(ArgType.Int, shortName = "c", description = "certificate index").multiple()
+class CertificateHelper : CliktCommand() {
+    init {
+        context { helpFormatter = CliktHelpFormatter(showDefaultValues = true, showRequiredTag = true) }
+    }
+
+    private val input by option("-i", "--input", help = "Input file or server name; - for stdin")
+        .default("-")
+    private val inputFormat by option("-f", "--inputFormat", help = "Input format")
+        .enum<InputFormat>().default(InputFormat.SERVER)
+    private val key by option("-k", "--key", help = "Config key")
+    private val port by option("-p", "--port", help = "Server port")
+        .int().default(443)
+    private val output by option("-o", "--output", help = "Output file name; - for stdout")
+        .default("-")
+    private val outputFormat by option("-t", "--outputFormat", help = "Output format")
+        .enum<OutputFormat>().default(OutputFormat.SUMMARY)
+    private val certIndex: List<Int> by option("-c", "--certIndex", help = "Certificate indices (comma-separated)")
+        .int().split(",").default(emptyList(), defaultForHelp = "all certificates")
 
     private val content = StringWriter()
     private val writer = PrintWriter(content)
 
-    init {
-        parser.parse(args)
-
+    override fun run() {
         when (inputFormat) {
             InputFormat.PEM, InputFormat.BASE64 -> handlePEM()
             InputFormat.SERVER -> handleServer()
@@ -83,16 +91,29 @@ class CertificateHelper(name: String, args: Array<String>) {
     }
 
     private fun handlePEM() {
-        val path = Path(input)
-        if (path.isReadable() && path.isRegularFile()) {
-            chain(path)
+        if (input == "-") {
+            val stdin = generateSequence(::readLine).joinToString("\n")
+            val inputStream = when (inputFormat) {
+                InputFormat.BASE64 -> stdin.base64Decode().inputStream()
+                else -> stdin.byteInputStream()
+            }
+            chain(input, inputStream)
         } else {
-            info(input, "Not a readable regular file")
+            val path = Path(input)
+            if (path.isReadable() && path.isRegularFile()) {
+                val inputStream = when (inputFormat) {
+                    InputFormat.BASE64 -> path.readText().base64Decode().inputStream()
+                    else -> path.inputStream()
+                }
+                chain(path.toString(), inputStream)
+            } else {
+                info(input, "Not a readable regular file")
+            }
         }
     }
 
     private fun handleServer() {
-        val host = input
+        val host = if (input == "-") readln() else input
         val tm = object : X509TrustManager {
             var chain: Array<X509Certificate>? = null
 
@@ -139,13 +160,17 @@ class CertificateHelper(name: String, args: Array<String>) {
     }
 
     private fun handleConfig() {
-        val config = input
+        val config = if (input == "-") {
+            generateSequence(::readLine).joinToString("\n")
+        } else {
+            Path(input).readText()
+        }
         val configKey = key
         if (configKey.isNullOrEmpty()) {
             info(input, "Key is required for config files")
             return
         }
-        var json: JsonElement? = Json.parseToJsonElement(Path(config).readText())
+        var json: JsonElement? = Json.parseToJsonElement(config)
         val keys = configKey.split(".").toMutableList()
         if (keys.size == 1) {
             keys += listOf("tls", "caBundleBase64")
@@ -157,7 +182,7 @@ class CertificateHelper(name: String, args: Array<String>) {
             info(input, "Cannot extract $configKey")
             return
         }
-        chain(config, json.jsonPrimitive.content.base64Decode().inputStream())
+        chain(input, json.jsonPrimitive.content.base64Decode().inputStream())
     }
 
     private fun chain(name: String, inputStream: InputStream) {
@@ -172,14 +197,6 @@ class CertificateHelper(name: String, args: Array<String>) {
                 info(name, "Could not read as X509 certificate")
             }
         }
-    }
-
-    private fun chain(path: Path) {
-        val inputStream = when (inputFormat) {
-            InputFormat.BASE64 -> path.readText().base64Decode().inputStream()
-            else -> path.inputStream()
-        }
-        chain(path.toString(), inputStream)
     }
 
     private fun info(name: String, info: String) {
