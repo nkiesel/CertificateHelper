@@ -16,15 +16,14 @@ import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.X509TrustManager
 import kotlin.io.path.Path
 import kotlin.io.path.inputStream
-import kotlin.io.path.isDirectory
 import kotlin.io.path.isReadable
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.readText
-import kotlin.io.path.useDirectoryEntries
 import kotlin.io.path.writeText
 import kotlinx.cli.ArgParser
 import kotlinx.cli.ArgType
 import kotlinx.cli.default
+import kotlinx.cli.multiple
 import kotlinx.cli.required
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -57,7 +56,6 @@ fun main(args: Array<String>) {
 }
 
 class CertificateHelper(name: String, args: Array<String>) {
-
     private val parser = ArgParser(name)
     private val inputFormat by parser.option(ArgType.Choice<InputFormat>(), shortName = "f", description = "Input format").default(InputFormat.SERVER)
     private val input by parser.option(ArgType.String, shortName = "i", description = "Input").required()
@@ -65,10 +63,10 @@ class CertificateHelper(name: String, args: Array<String>) {
     private val port by parser.option(ArgType.Int, shortName = "p", description = "server port").default(443)
     private val outputFormat by parser.option(ArgType.Choice<OutputFormat>(), shortName = "t", description = "Output format").default(OutputFormat.SUMMARY)
     private val output by parser.option(ArgType.String, shortName = "o", description = "Output (- for stdout)").default("-")
-    private val certIndex by parser.option(ArgType.Int, shortName = "c", description = "certificate index")
+    private val certIndex by parser.option(ArgType.Int, shortName = "c", description = "certificate index").multiple()
 
-    private val s = StringWriter()
-    private val writer = PrintWriter(s)
+    private val content = StringWriter()
+    private val writer = PrintWriter(content)
 
     init {
         parser.parse(args)
@@ -80,28 +78,16 @@ class CertificateHelper(name: String, args: Array<String>) {
         }
         writer.flush()
 
-        var final = s.toString()
-        if (outputFormat == OutputFormat.BASE64) final = final.base64Encode()
+        val final = content.toString().let { if (outputFormat == OutputFormat.BASE64) it.base64Encode() else it }
         if (output == "-") println(final) else Path(output).writeText(final)
     }
 
     private fun handlePEM() {
         val path = Path(input)
-        if (path.isReadable()) {
-            if (path.isRegularFile()) {
-                chain(path)
-            } else if (path.isDirectory()) {
-                path.useDirectoryEntries("*") { paths ->
-                    // Only use 1-context for directories
-                    paths.filter { it.isReadable() && it.isRegularFile() }.forEach {
-                        chain(it)
-                    }
-                }
-            } else {
-                info(input, "Not a regular file or directory")
-            }
+        if (path.isReadable() && path.isRegularFile()) {
+            chain(path)
         } else {
-            info(input, "Not readable")
+            info(input, "Not a readable regular file")
         }
     }
 
@@ -123,7 +109,7 @@ class CertificateHelper(name: String, args: Array<String>) {
             }
         }
 
-        val socketFactory: SSLSocketFactory = SSLContext.getInstance("TLS").apply {
+        val socketFactory = SSLContext.getInstance("TLS").apply {
             init(null, arrayOf<X509TrustManager>(tm), null)
         }.socketFactory
 
@@ -136,19 +122,19 @@ class CertificateHelper(name: String, args: Array<String>) {
         sslSocket.use {
             try {
                 it.startHandshake()
-            } catch (e: SSLException) {
+            } catch (_: SSLException) {
             }
         }
 
         val chain = tm.chain
-        if (chain != null) {
-            for (cert in chain.withIndex()) {
-                if (certIndex == null || certIndex == cert.index) {
-                    certificate(host, cert.value)
-                }
-            }
-        } else {
+        if (chain == null) {
             info(host, "Could not obtain server certificate chain")
+            return
+        }
+        for (cert in chain.withIndex()) {
+            if (certIndex.isEmpty() || cert.index in certIndex) {
+                certificate(host, cert.value)
+            }
         }
     }
 
@@ -178,7 +164,7 @@ class CertificateHelper(name: String, args: Array<String>) {
         inputStream.use { stream ->
             try {
                 for (cert in certificateFactory.generateCertificates(stream).withIndex()) {
-                    if (certIndex == null || certIndex == cert.index) {
+                    if (certIndex.isEmpty() || cert.index in certIndex) {
                         certificate(name, cert.value)
                     }
                 }
@@ -189,7 +175,7 @@ class CertificateHelper(name: String, args: Array<String>) {
     }
 
     private fun chain(path: Path) {
-        val inputStream = when(inputFormat) {
+        val inputStream = when (inputFormat) {
             InputFormat.BASE64 -> path.readText().base64Decode().inputStream()
             else -> path.inputStream()
         }
