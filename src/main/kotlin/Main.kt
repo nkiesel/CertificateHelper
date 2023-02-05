@@ -36,6 +36,7 @@ private val sha256 = MessageDigest.getInstance("SHA-256")
 private val hexFormat = HexFormat.ofDelimiter("").withUpperCase()
 private val certificateFactory = CertificateFactory.getInstance("X.509")
 private val pemEncoder = Base64.getMimeEncoder(64, "\n".toByteArray())
+private val tlsContext = SSLContext.getInstance("TLS")
 
 fun ByteArray.sha256(): ByteArray = sha256.digest(this)
 fun ByteArray.hex(): String = hexFormat.formatHex(this)
@@ -49,7 +50,7 @@ enum class InputFormat {
 }
 
 enum class OutputFormat {
-    PEM, SUMMARY, BASE64, TEXT
+    SUMMARY, TEXT, PEM, BASE64
 }
 
 fun main(args: Array<String>) {
@@ -92,7 +93,7 @@ class CertificateHelper : CliktCommand() {
 
     private fun handlePEM() {
         if (input == "-") {
-            val stdin = generateSequence(::readLine).joinToString("\n")
+            val stdin = readText()
             val inputStream = when (inputFormat) {
                 InputFormat.BASE64 -> stdin.base64Decode().inputStream()
                 else -> stdin.byteInputStream()
@@ -130,7 +131,7 @@ class CertificateHelper : CliktCommand() {
             }
         }
 
-        val socketFactory = SSLContext.getInstance("TLS").apply {
+        val socketFactory = tlsContext.apply {
             init(null, arrayOf<X509TrustManager>(tm), null)
         }.socketFactory
 
@@ -160,13 +161,9 @@ class CertificateHelper : CliktCommand() {
     }
 
     private fun handleConfig() {
-        val config = if (input == "-") {
-            generateSequence(::readLine).joinToString("\n")
-        } else {
-            Path(input).readText()
-        }
+        val config = if (input == "-") readText() else Path(input).readText()
         val configKey = key
-        if (configKey.isNullOrEmpty()) {
+        if (configKey.isNullOrBlank()) {
             info(input, "Key is required for config files")
             return
         }
@@ -199,6 +196,8 @@ class CertificateHelper : CliktCommand() {
         }
     }
 
+    private fun readText() = generateSequence(::readLine).joinToString("\n")
+
     private fun info(name: String, info: String) {
         println("\n$name: $info")
     }
@@ -208,21 +207,6 @@ class CertificateHelper : CliktCommand() {
             OutputFormat.SUMMARY -> certificateSummary(name, cert)
             OutputFormat.TEXT -> certificateText(name, cert)
             OutputFormat.BASE64, OutputFormat.PEM -> certificatePem(cert)
-        }
-    }
-
-    private fun certificatePem(cert: Certificate) {
-        with(writer) {
-            println("-----BEGIN CERTIFICATE-----")
-            println(pemEncoder.encodeToString(cert.encoded))
-            println("-----END CERTIFICATE-----")
-        }
-    }
-
-    private fun certificateText(name: String, cert: Certificate) {
-        with(writer) {
-            println(name)
-            println(cert)
         }
     }
 
@@ -236,13 +220,29 @@ class CertificateHelper : CliktCommand() {
                     println("\tSHA256 fingerprint: ${encoded.sha256Hex()}")
                     println("\tSHA256 public key: ${publicKey.encoded.sha256Hex()}")
                     println("\tExpires: ${this.notAfter.toInstant()}")
-                    if (!subjectAlternativeNames.isNullOrEmpty()) {
-                        println("\tDNS names: ${subjectAlternativeNames.mapNotNull { dns(it) }}")
+                    val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }
+                    if (!dnsNames.isNullOrEmpty()) {
+                        println("\tDNS names: $dnsNames")
                     }
                 }
             }
         } catch (e: Exception) {
             info(name, "Could not read as X509 certificate")
+        }
+    }
+
+    private fun certificateText(name: String, cert: Certificate) {
+        with(writer) {
+            println(name)
+            println(cert)
+        }
+    }
+
+    private fun certificatePem(cert: Certificate) {
+        with(writer) {
+            println("-----BEGIN CERTIFICATE-----")
+            println(pemEncoder.encodeToString(cert.encoded))
+            println("-----END CERTIFICATE-----")
         }
     }
 }

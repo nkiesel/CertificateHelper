@@ -66,15 +66,19 @@ leaf certificate from a server, add `-c 0`.
 
 Run `$JAVA_HOME/bin/java -jar CertificateHelper-1.0-uber.jar -h` to see all the options:
 ```text
+Usage: certificate-helper [OPTIONS]
+
 Options:
-    --inputFormat, -f [SERVER] -> Input format { Value should be one of [server, config, pem, base64] }
-    --input, -i -> Input (always required) { String }
-    --key, -k -> Config key { String }
-    --port, -p [443] -> server port { Int }
-    --outputFormat, -t [SUMMARY] -> Output format { Value should be one of [pem, summary, base64, text] }
-    --output, -o [-] -> Output (- for stdout) { String }
-    --certIndex, -c -> certificate index { Int }
-    --help, -h -> Usage info
+  -i, --input TEXT                 Input file or server name; - for stdin (default: -)
+  -f, --inputFormat [SERVER|CONFIG|PEM|BASE64]
+                                   Input format (default: SERVER)
+  -k, --key TEXT                   Config key
+  -p, --port INT                   Server port (default: 443)
+  -o, --output TEXT                Output file name; - for stdout (default: -)
+  -t, --outputFormat [PEM|SUMMARY|BASE64|TEXT]
+                                   Output format (default: SUMMARY)
+  -c, --certIndex INT              Certificate indices (comma-separated) (default: all certificates)
+  -h, --help                       Show this message and exit
 ```
 
 Note: The `text` output format is a non-standard format and not the usual `openssl x509 -text` format. If you need
