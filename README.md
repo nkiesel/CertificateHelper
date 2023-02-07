@@ -9,26 +9,36 @@ file (optionally Base64 encoded).
 ## Installation
 
 You can then build the Jar using `./gradew uber` to generate an "uber" (or "fat") Jar, or download that Jar from the
-"Releases" page.
+"Releases" page.  If you build the Jar yourself, then you will find it in `build/libs`.
 
-The code is built using Java 17 and thus requires Java 17 to execute it. Some examples on how to install if it is
+The code is built using Java 17 and thus requires Java 17 or higher to execute it. Some examples on how to install if it is
 missing:
- - Debian: `apt install openjsk-17-jre`
- - MacOS: `brew install openjdk@17` (and then following the instructions)
+ - Debian: `apt install openjdk-17-jre`
+ - MacOS: `brew install openjdk` (which currently installs Java 19) or `brew install openjdk@17`.
 
-If you install it, then this also often requires to set the JAVA_HOME environment variable correctly.
+If you install it, then this also often requires to set the JAVA_HOME environment variable correctly:
+```shell
+# for Debian
+export JAVA_HOME=/var/lib/jdk/openjdk-17
+# for MacOS with Java 17
+export JAVA_HOME=/opt/homebrew/Cellar/openjdk@17/17.0.6
+# for MacOS with Java 19
+export JAVA_HOME=/opt/homebrew/Cellar/openjdk/19.0.2
+```
 
 ## Usage
 
 Typical use case is to first look at a certificate chain for a server using the following command (replace
 `api.github.com` with the host name you are interested in):
 ```shell
-$JAVA_HOME/bin/java -jar CertificateHelper-1.3-uber.jar -i api.github.com
+$JAVA_HOME/bin/java -jar build/libs/CertificateHelper-1.3-uber.jar -i api.github.com
 ```
-To simplify the command, consider defining a Shell function (for Bash or Zsh):
+To simplify the command, consider defining a Shell function (for Bash or Zsh). Assuming you are in the top-level
+directory of the cloned repository, use something like
 ```shell
+export CH=$PWD
 function ch() {
-  $JAVA_HOME/bin/java -jar CertificateHelper-1.3-uber.jar "$@"
+  $JAVA_HOME/bin/java -jar $CH/build/libs/CertificateHelper-1.3-uber.jar "$@"
 }
 ```
 which simplifies the command to `ch -i api.github.com`.
