@@ -26,6 +26,8 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.split
 import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.int
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
@@ -50,7 +52,7 @@ enum class InputFormat {
 }
 
 enum class OutputFormat {
-    SUMMARY, TEXT, PEM, BASE64
+    SUMMARY, TEXT, PEM, BASE64, CONFIG
 }
 
 fun main(args: Array<String>) {
@@ -87,9 +89,41 @@ class CertificateHelper : CliktCommand() {
         }
         writer.flush()
 
-        val final = content.toString().let { if (outputFormat == OutputFormat.BASE64) it.base64Encode() else it }
-        if (output == "-") println(final) else Path(output).writeText(final)
+        val final = content.toString().let {
+            when (outputFormat) {
+                OutputFormat.BASE64, OutputFormat.CONFIG -> it.base64Encode()
+                else -> it
+            }
+        }
+        when {
+            output == "-" -> println(final)
+            outputFormat == OutputFormat.CONFIG -> updateConfig(final)
+            else -> Path(output).writeText(final)
+        }
     }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun updateConfig(content: String) {
+        val config = Path(output).readText()
+        val configKey = getConfigKey()
+        if (configKey.isNullOrBlank()) {
+            info(input, "Key is required for config files")
+            return
+        }
+        try {
+            val json = Json.parseToJsonElement(config).jsonObject
+            val updated = setJsonValue(json, configKey, content)
+            val format = Json {
+                prettyPrint = true
+                prettyPrintIndent = "  "
+            }
+            Path(output).writeText(format.encodeToString(updated))
+        } catch (e: Exception) {
+            info(output, "Cannot parse as JSON")
+            return
+        }
+    }
+
 
     private fun handlePEM() {
         if (input == "-") {
@@ -160,19 +194,24 @@ class CertificateHelper : CliktCommand() {
         }
     }
 
+    private fun getConfigKey(): String? {
+        val configKey = key
+        return when {
+            configKey.isNullOrBlank() -> null
+            "." in configKey -> configKey
+            else -> "$configKey.tls.caBundleBase64"
+        }
+    }
+
     private fun handleConfig() {
         val config = if (input == "-") readText() else Path(input).readText()
-        val configKey = key
+        val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
             info(input, "Key is required for config files")
             return
         }
         var json: JsonElement? = Json.parseToJsonElement(config)
-        val keys = configKey.split(".").toMutableList()
-        if (keys.size == 1) {
-            keys += listOf("tls", "caBundleBase64")
-        }
-        for (comp in keys) {
+        for (comp in configKey.split(".")) {
             json = json?.jsonObject?.get(comp)
         }
         if (json == null) {
@@ -206,7 +245,7 @@ class CertificateHelper : CliktCommand() {
         when (outputFormat) {
             OutputFormat.SUMMARY -> certificateSummary(name, cert)
             OutputFormat.TEXT -> certificateText(name, cert)
-            OutputFormat.BASE64, OutputFormat.PEM -> certificatePem(cert)
+            OutputFormat.BASE64, OutputFormat.PEM, OutputFormat.CONFIG -> certificatePem(cert)
         }
     }
 

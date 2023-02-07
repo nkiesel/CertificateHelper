@@ -13,20 +13,22 @@ repositories {
 dependencies {
     implementation("com.github.ajalt.clikt:clikt:3.5.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1")
+
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.2")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.2")
+    testImplementation("io.kotest:kotest-assertions-core:5.5.5")
 }
 
 kotlin {
     jvmToolchain(17)
 }
 
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
-    }
+application {
+    mainClass.set("CertificateHelperKt")
 }
 
-application {
-    mainClass.set("MainKt")
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }
 
 tasks.register<Jar>("uberJar") {

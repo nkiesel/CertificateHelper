@@ -23,8 +23,15 @@ If you install it, then this also often requires to set the JAVA_HOME environmen
 Typical use case is to first look at a certificate chain for a server using the following command (replace
 `api.github.com` with the host name you are interested in):
 ```shell
-$JAVA_HOME/bin/java -jar CertificateHelper-1.0-uber.jar -i api.github.com
+$JAVA_HOME/bin/java -jar CertificateHelper-1.3-uber.jar -i api.github.com
 ```
+To simplify the command, consider defining a Shell function (for Bash or Zsh):
+```shell
+function ch() {
+  $JAVA_HOME/bin/java -jar CertificateHelper-1.3-uber.jar "$@"
+}
+```
+which simplifies the command to `ch -i api.github.com`.
 This results in something like
 ```text
 api.github.com: X509 certificate for *.github.com
@@ -45,7 +52,7 @@ PEM using `... -t base64 -o github.b64`.
 The program can also read certificates from files (in PEM or Base-64-encoded PEM format), or extract them from JSON
 configuration files:
 ```shell
-$JAVA_HOME/bin/java -jar CertificateHelper-1.0-uber.jar -f config -i config/dev.json -k github.tls.caBundleBase64
+ch -f config -i config/dev.json -k github.tls.caBundleBase64
 ```
 will print the summary of a Base64-encoded PEM chain stored in `config/dev.json` under the path
 ```json
@@ -64,22 +71,41 @@ If you are only interested in a single certificate instead of the whole certific
 `--certIndex` option to select that certificate. The leaf certificate always has index 0.  Thus, to only get the 
 leaf certificate from a server, add `-c 0`.
 
-Run `$JAVA_HOME/bin/java -jar CertificateHelper-1.0-uber.jar -h` to see all the options:
+Run `ch -h` to see all the options:
 ```text
 Usage: certificate-helper [OPTIONS]
 
 Options:
-  -i, --input TEXT                 Input file or server name; - for stdin (default: -)
+  -i, --input TEXT                 Input file or server name; - for stdin
+                                   (default: -)
   -f, --inputFormat [SERVER|CONFIG|PEM|BASE64]
                                    Input format (default: SERVER)
   -k, --key TEXT                   Config key
   -p, --port INT                   Server port (default: 443)
   -o, --output TEXT                Output file name; - for stdout (default: -)
-  -t, --outputFormat [PEM|SUMMARY|BASE64|TEXT]
+  -t, --outputFormat [SUMMARY|TEXT|PEM|BASE64|CONFIG]
                                    Output format (default: SUMMARY)
-  -c, --certIndex INT              Certificate indices (comma-separated) (default: all certificates)
+  -c, --certIndex INT              Certificate indices (comma-separated)
+                                   (default: all certificates)
   -h, --help                       Show this message and exit
 ```
 
 Note: The `text` output format is a non-standard format and not the usual `openssl x509 -text` format. If you need
 the latter, use `CerificateHelper` to get the certificates in PEM format and then pipe them into `openssl`.
+
+## Examples
+
+All these assume you use the `ch` function described above.
+
+1. Show certificate summary chain of server `api.github.com`
+    ```shell
+    ch -i api.github.com 
+    ```
+2. Show leaf certificate of `api.github.com` in OpenSSL text format
+    ```shell
+    ch -i api.github.com -t pem -c 0 | openssl -noout -text 
+    ```
+3. Update Base64-encoded certificate in `config.json` file from current server 
+    ```shell
+    ch -i api.github.com -t config -k github.tls.caBundle -o config.json
+    ```
