@@ -97,13 +97,13 @@ the latter, use `CerificateHelper` to get the certificates in PEM format and the
 
 All these assume you use the `ch` function described above.
 
-1. Show certificate summary chain of server `api.github.com`
+1. Show the summary of the certificate chain of server `api.github.com`
     ```shell
     ch -i api.github.com 
     ```
 2. Show leaf certificate of `api.github.com` in OpenSSL text format
     ```shell
-    ch -i api.github.com -t pem -c 0 | openssl -noout -text 
+    ch -i api.github.com -t pem -c 0 | openssl x509 -noout -text
     ```
 3. Update Base64-encoded certificate in `config.json` file from current server 
     ```shell
