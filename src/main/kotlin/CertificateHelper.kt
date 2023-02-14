@@ -251,6 +251,7 @@ class CertificateHelper : CliktCommand() {
 
     private fun certificateSummary(name: String, cert: Certificate) {
         fun dns(altName: List<*>): String? = if (altName[0] as Int == 2) altName[1] as String else null
+        fun email(altName: List<*>): String? = if (altName[0] as Int == 1) altName[1] as String else null
 
         try {
             with(writer) {
@@ -262,6 +263,10 @@ class CertificateHelper : CliktCommand() {
                     val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }
                     if (!dnsNames.isNullOrEmpty()) {
                         println("\tDNS names: $dnsNames")
+                    }
+                    val emails = subjectAlternativeNames?.mapNotNull { email(it) }
+                    if (!emails.isNullOrEmpty()) {
+                        println("\temails: $emails")
                     }
                 }
             }
