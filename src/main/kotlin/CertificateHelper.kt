@@ -256,7 +256,9 @@ class CertificateHelper : CliktCommand() {
         try {
             with(writer) {
                 with(cert as X509Certificate) {
-                    println("\n$name: X509 certificate for ${LdapName(subjectX500Principal.name).rdns.last().value}")
+                    val subject = subjectX500Principal.name
+                    val cn = LdapName(subject).rdns.find { it.type == "CN" }?.value ?: subject
+                    println("\n$name: X509 v$version certificate for $cn")
                     println("\tSHA256 fingerprint: ${encoded.sha256Hex()}")
                     println("\tSHA256 public key: ${publicKey.encoded.sha256Hex()}")
                     println("\tExpires: ${this.notAfter.toInstant()}")
