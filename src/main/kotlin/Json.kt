@@ -14,7 +14,7 @@ fun setJsonValue(json: JsonObject, path: String, value: Boolean): JsonObject {
     return setJsonValueRec(json, path.split("."), JsonPrimitive(value))
 }
 
-private tailrec fun setJsonValueRec(obj: JsonObject, path: List<String>, value: JsonPrimitive): JsonObject {
+private fun setJsonValueRec(obj: JsonObject, path: List<String>, value: JsonPrimitive): JsonObject {
     return JsonObject(obj.toMutableMap().apply {
         val key = path.first()
         put(
