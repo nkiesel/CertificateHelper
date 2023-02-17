@@ -1,3 +1,23 @@
+import java.io.ByteArrayInputStream
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.security.KeyFactory
+import java.security.MessageDigest
+import java.security.PrivateKey
+import java.security.PublicKey
+import java.security.cert.Certificate
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
+import java.security.spec.PKCS8EncodedKeySpec
+import java.security.spec.X509EncodedKeySpec
+import java.util.*
+import javax.naming.ldap.LdapName
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLException
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.X509TrustManager
+import javax.security.auth.x500.X500Principal
+import kotlin.io.path.*
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.output.CliktHelpFormatter
@@ -18,32 +38,19 @@ import org.http4k.core.Method
 import org.http4k.core.Request
 import org.http4k.core.Uri
 import org.http4k.core.appendToPath
-import java.io.InputStream
-import java.io.PrintWriter
-import java.io.StringWriter
-import java.security.MessageDigest
-import java.security.cert.Certificate
-import java.security.cert.CertificateFactory
-import java.security.cert.X509Certificate
-import java.util.*
-import javax.naming.ldap.LdapName
-import javax.net.ssl.SSLContext
-import javax.net.ssl.SSLException
-import javax.net.ssl.SSLSocket
-import javax.net.ssl.X509TrustManager
-import javax.security.auth.x500.X500Principal
-import kotlin.io.path.*
 
 
 private val sha256 = MessageDigest.getInstance("SHA-256")
 private val hexFormat = HexFormat.ofDelimiter("").withUpperCase()
 private val certificateFactory = CertificateFactory.getInstance("X.509")
+private val rsaKeyFactory = KeyFactory.getInstance("RSA")
 private val pemEncoder = Base64.getMimeEncoder(64, "\n".toByteArray())
 private val tlsContext = SSLContext.getInstance("TLS")
 
 fun ByteArray.sha256(): ByteArray = sha256.digest(this)
 fun ByteArray.hex(): String = hexFormat.formatHex(this)
 fun ByteArray.sha256Hex(): String = sha256().hex()
+fun ByteArray.base64Decode(): ByteArray = Base64.getDecoder().decode(this)
 fun String.base64Decode(): ByteArray = Base64.getDecoder().decode(this)
 fun ByteArray.base64Encode(): String = Base64.getEncoder().encodeToString(this)
 fun String.base64Encode(): String = encodeToByteArray().base64Encode()
@@ -152,7 +159,7 @@ class CertificateHelper : CliktCommand(
             if (path.isReadable() && path.isRegularFile()) {
                 val inputStream = when (inputFormat) {
                     InputFormat.BASE64 -> path.readText().base64Decode().inputStream()
-                    else -> path.inputStream()
+                    else -> path.readBytes().inputStream()
                 }
                 chain(path.toString(), inputStream)
             } else {
@@ -296,16 +303,36 @@ class CertificateHelper : CliktCommand(
         }
     }
 
-    private fun chain(name: String, inputStream: InputStream) {
+    private fun chain(name: String, inputStream: ByteArrayInputStream) {
+        inputStream.mark(0)
+        val firstLine = inputStream.bufferedReader().readLine()
+        inputStream.reset()
         inputStream.use { stream ->
-            try {
-                for (cert in certificateFactory.generateCertificates(stream).withIndex()) {
-                    if (certIndex.isEmpty() || cert.index in certIndex) {
-                        certificate(name, cert.value)
+            when (firstLine) {
+                "-----BEGIN CERTIFICATE-----" ->
+                    try {
+                        for (cert in certificateFactory.generateCertificates(stream).withIndex()) {
+                            if (certIndex.isEmpty() || cert.index in certIndex) {
+                                certificate(name, cert.value)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        info(name, "Could not read as X509 certificate")
                     }
+
+                "-----BEGIN PUBLIC KEY-----" -> try {
+                    val key = rsaKeyFactory.generatePublic(X509EncodedKeySpec(inputStream.readAllBytes().base64Decode()))
+                    publicKey(name, key)
+                } catch (e: Exception) {
+                    info(name, "Could not read as public RSA key")
                 }
-            } catch (e: Exception) {
-                info(name, "Could not read as X509 certificate")
+
+                "-----BEGIN PRIVATE KEY-----" -> try {
+                    val key = rsaKeyFactory.generatePrivate(PKCS8EncodedKeySpec(inputStream.readAllBytes().base64Decode()))
+                    privateKey(name, key)
+                } catch (e: Exception) {
+                    info(name, "Could not read as public RSA key")
+                }
             }
         }
     }
@@ -367,4 +394,65 @@ class CertificateHelper : CliktCommand(
             println("-----END CERTIFICATE-----")
         }
     }
+
+    private fun publicKey(name: String, key: PublicKey) {
+        when (outputFormat) {
+            OutputFormat.SUMMARY -> publicKeySummary(name, key)
+            OutputFormat.TEXT -> publicKeyText(name, key)
+            OutputFormat.BASE64, OutputFormat.PEM, OutputFormat.CONFIG -> publicKeyPem(key)
+        }
+    }
+
+    private fun publicKeySummary(name: String, key: PublicKey) {
+        with(writer) {
+            println(key.algorithm)
+            println(key.format)
+        }
+    }
+
+    private fun publicKeyText(name: String, key: PublicKey) {
+        with(writer) {
+            println(key.algorithm)
+            println(key.format)
+        }
+    }
+
+    private fun publicKeyPem(key: PublicKey) {
+        with(writer) {
+            println("-----BEGIN PUBLIC KEY-----")
+            println(pemEncoder.encodeToString(key.encoded))
+            println("-----END PUBLIC KEY-----")
+        }
+    }
+
+    private fun privateKey(name: String, key: PrivateKey) {
+        when (outputFormat) {
+            OutputFormat.SUMMARY -> privateKeySummary(name, key)
+            OutputFormat.TEXT -> privateKeyText(name, key)
+            OutputFormat.BASE64, OutputFormat.PEM, OutputFormat.CONFIG -> privateKeyPem(key)
+        }
+    }
+
+    private fun privateKeySummary(name: String, key: PrivateKey) {
+        with(writer) {
+            println(key.algorithm)
+            println(key.format)
+        }
+    }
+
+    private fun privateKeyText(name: String, key: PrivateKey) {
+        with(writer) {
+            println(key.algorithm)
+            println(key.format)
+        }
+    }
+
+    private fun privateKeyPem(key: PrivateKey) {
+        with(writer) {
+            println("-----BEGIN PUBLIC KEY-----")
+            println(pemEncoder.encodeToString(key.encoded))
+            println("-----END PUBLIC KEY-----")
+        }
+    }
+
 }
