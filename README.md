@@ -29,16 +29,18 @@ export JAVA_HOME=/opt/homebrew/Cellar/openjdk/19.0.2
 ## Usage
 
 Typical use case is to first look at a certificate chain for a server using the following command (replace
-`api.github.com` with the host name you are interested in):
+`api.github.com` with the name of the server you are interested in):
 ```shell
-$JAVA_HOME/bin/java -jar build/libs/CertificateHelper-1.3-uber.jar -i api.github.com
+$JAVA_HOME/bin/java -jar build/libs/CertificateHelper-1.4.0-alpha-uber.jar -i api.github.com
 ```
 To simplify the command, consider defining a Shell function (for Bash or Zsh). Assuming you are in the top-level
 directory of the cloned repository, use something like
 ```shell
-export CH=$PWD
-function ch() {
-  $JAVA_HOME/bin/java -jar $CH/build/libs/CertificateHelper-1.3-uber.jar "$@"
+jar=$(realpath build/libs/*-uber.jar)
+function ch {
+  typeset -g ch_jar
+  : ${ch_jar:=$jar}
+  $JAVA_HOME/bin/java -jar $ch_jar "$@"
 }
 ```
 which simplifies the command to `ch -i api.github.com`.
@@ -81,23 +83,30 @@ If you are only interested in a single certificate instead of the whole certific
 `--certIndex` option to select that certificate. The leaf certificate always has index 0.  Thus, to only get the 
 leaf certificate from a server, add `-c 0`.
 
-Run `ch -h` to see all the options:
+Run `ch --help` to see all the options:
 ```text
-Usage: certificate-helper [OPTIONS]
+Usage: ch [OPTIONS]
+
+  Reads or updates certificates from server, file, or vault. Example:
+
+  ch -f server -i api.github.com
 
 Options:
-  -i, --input TEXT                 Input file or server name; - for stdin
-                                   (default: -)
-  -f, --inputFormat [SERVER|CONFIG|PEM|BASE64]
-                                   Input format (default: SERVER)
-  -k, --key TEXT                   Config key
-  -p, --port INT                   Server port (default: 443)
-  -o, --output TEXT                Output file name; - for stdout (default: -)
-  -t, --outputFormat [SUMMARY|TEXT|PEM|BASE64|CONFIG]
-                                   Output format (default: SUMMARY)
-  -c, --certIndex INT              Certificate indices (comma-separated)
-                                   (default: all certificates)
-  -h, --help                       Show this message and exit
+  --generate-completion [bash|zsh|fish]
+  -i, --input TEXT                                     Input file or server name; - for stdin (default: -)
+  -f, --inputFormat [SERVER|CONFIG|PEM|BASE64|VAULT]   Input format (default: SERVER)
+  -k, --key TEXT                                       Config key
+  -p, --port INT                                       Server port (default: 443)
+  -o, --output TEXT                                    Output file name; - for stdout (default: -)
+  -t, --outputFormat [SUMMARY|TEXT|PEM|BASE64|CONFIG]  Output format (default: SUMMARY)
+  -c, --certIndex INT                                  Certificate indices (comma-separated) (default: all certificates)
+  -h, --help                                           Show this message and exit
+
+Vault operations need a current vault token. This can be provided either via the environment variable VAULT_TOKEN, or via the file
+$HOME/.vault-token. The latter is automatically created when using the command "vault login". The token (normally valid for 24
+hours) can be generated after signing into the vault using the URL (requires Okta Yubikey authentication)
+https://hashicorp-vault.corp.creditkarma.com:6661/ui/vault/auth?with=okta_oidc and then using the "Copy Token" menu entry from the
+top-right user menu.
 ```
 
 Note: The `text` output format is a non-standard format and not the usual `openssl x509 -text` format. If you need

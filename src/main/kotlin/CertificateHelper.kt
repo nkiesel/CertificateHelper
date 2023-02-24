@@ -1,3 +1,19 @@
+import java.io.InputStream
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.security.MessageDigest
+import java.security.cert.Certificate
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
+import java.util.*
+import javax.naming.ldap.LdapName
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLException
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.X509TrustManager
+import javax.security.auth.x500.X500Principal
+import kotlin.io.path.*
+import com.github.ajalt.clikt.completion.completionOption
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.output.CliktHelpFormatter
@@ -18,21 +34,6 @@ import org.http4k.core.Method
 import org.http4k.core.Request
 import org.http4k.core.Uri
 import org.http4k.core.appendToPath
-import java.io.InputStream
-import java.io.PrintWriter
-import java.io.StringWriter
-import java.security.MessageDigest
-import java.security.cert.Certificate
-import java.security.cert.CertificateFactory
-import java.security.cert.X509Certificate
-import java.util.*
-import javax.naming.ldap.LdapName
-import javax.net.ssl.SSLContext
-import javax.net.ssl.SSLException
-import javax.net.ssl.SSLSocket
-import javax.net.ssl.X509TrustManager
-import javax.security.auth.x500.X500Principal
-import kotlin.io.path.*
 
 
 private val sha256 = MessageDigest.getInstance("SHA-256")
@@ -63,6 +64,13 @@ fun main(args: Array<String>) {
 }
 
 class CertificateHelper : CliktCommand(
+    name = "ch",
+    help = """
+        Reads or updates certificates from server, file, or vault.  Example:
+        ```
+        ch -f server -i api.github.com
+        ```
+    """.trimIndent(),
     epilog = """
     Vault operations need a current vault token. This can be provided either via
     the environment variable VAULT_TOKEN, or via the file ${'$'}HOME/.vault-token.
@@ -71,10 +79,17 @@ class CertificateHelper : CliktCommand(
     using the URL (requires Okta Yubikey authentication)
     ${VAULT_ADDR}/ui/vault/auth?with=okta_oidc
     and then using the "Copy Token" menu entry from the top-right user menu.
-    """.trimIndent()
+    """.trimIndent(),
 ) {
     init {
-        context { helpFormatter = CliktHelpFormatter(showDefaultValues = true, showRequiredTag = true) }
+        context {
+            helpFormatter = CliktHelpFormatter(
+                showDefaultValues = true,
+                showRequiredTag = true,
+                maxWidth = 125
+            )
+        }
+        completionOption()
     }
 
     private val input by option("-i", "--input", help = "Input file or server name; - for stdin").default("-")
