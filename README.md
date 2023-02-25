@@ -21,9 +21,9 @@ If you install it, then this also often requires to set the JAVA_HOME environmen
 # for Debian
 export JAVA_HOME=/var/lib/jdk/openjdk-17
 # for MacOS with Java 17
-export JAVA_HOME=/opt/homebrew/Cellar/openjdk@17/17.0.6
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home
 # for MacOS with Java 19
-export JAVA_HOME=/opt/homebrew/Cellar/openjdk/19.0.2
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-19.jdk/Contents/Home
 ```
 
 ## Usage
@@ -100,6 +100,7 @@ Options:
   -o, --output TEXT                                    Output file name; - for stdout (default: -)
   -t, --outputFormat [SUMMARY|TEXT|PEM|BASE64|CONFIG]  Output format (default: SUMMARY)
   -c, --certIndex INT                                  Certificate indices (comma-separated) (default: all certificates)
+  --timeout VALUE                                      Server connection timeout; 0s for no timeout (default: 5s)
   -h, --help                                           Show this message and exit
 
 Vault operations need a current vault token. This can be provided either via the environment variable VAULT_TOKEN, or via the file

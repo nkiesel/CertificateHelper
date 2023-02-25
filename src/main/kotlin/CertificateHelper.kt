@@ -93,7 +93,7 @@ class CertificateHelper : CliktCommand(
             helpFormatter = CliktHelpFormatter(
                 showDefaultValues = true,
                 showRequiredTag = true,
-                maxWidth = 125
+                maxWidth = 130
             )
         }
         completionOption()
@@ -112,7 +112,7 @@ class CertificateHelper : CliktCommand(
         "--certIndex",
         help = "Certificate indices (comma-separated)"
     ).int().split(",").default(emptyList(), defaultForHelp = "all certificates")
-    private val timeout by option(help = "server connection timeout; 0s for no timeout").convert { Duration.parse(it) }.default(5.seconds)
+    private val timeout by option(help = "Server connection timeout; 0s for no timeout").convert { Duration.parse(it) }.default(5.seconds)
 
     private val content = StringWriter()
     private val writer = PrintWriter(content)
