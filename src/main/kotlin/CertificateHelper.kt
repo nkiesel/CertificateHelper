@@ -1,6 +1,7 @@
 import java.io.InputStream
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.net.InetSocketAddress
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.cert.Certificate
@@ -11,14 +12,18 @@ import javax.naming.ldap.LdapName
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLException
 import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 import javax.security.auth.x500.X500Principal
 import kotlin.io.path.*
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 import com.github.ajalt.clikt.completion.completionOption
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.output.CliktHelpFormatter
+import com.github.ajalt.clikt.parameters.options.convert
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.split
@@ -107,6 +112,7 @@ class CertificateHelper : CliktCommand(
         "--certIndex",
         help = "Certificate indices (comma-separated)"
     ).int().split(",").default(emptyList(), defaultForHelp = "all certificates")
+    private val timeout by option(help = "server connection timeout; 0s for no timeout").convert { Duration.parse(it) }.default(5.seconds)
 
     private val content = StringWriter()
     private val writer = PrintWriter(content)
@@ -194,6 +200,17 @@ class CertificateHelper : CliktCommand(
             override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
                 this.chain = chain
             }
+        }
+
+        // TODO: could not yet figure out how to combine timeout and cert extraction, so we currently
+        // connect twice: first to make sure we can connect; and then to extract the certificates
+        try {
+            SSLSocketFactory.getDefault().createSocket().use {
+                it.connect(InetSocketAddress(host, port), timeout.inWholeMilliseconds.toInt())
+            }
+        } catch (e: Exception) {
+            info(host, "Could not connect within $timeout")
+            return
         }
 
         val socketFactory = tlsContext.apply {
