@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "io.nkiesel"
-version = "1.4.0-alpha"
+version = "1.5.0-alpha"
 
 repositories {
     mavenCentral()

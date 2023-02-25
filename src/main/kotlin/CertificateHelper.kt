@@ -1,6 +1,7 @@
 import java.io.InputStream
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.cert.Certificate
 import java.security.cert.CertificateFactory
@@ -10,6 +11,7 @@ import javax.naming.ldap.LdapName
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLException
 import javax.net.ssl.SSLSocket
+import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509TrustManager
 import javax.security.auth.x500.X500Principal
 import kotlin.io.path.*
@@ -219,6 +221,19 @@ class CertificateHelper : CliktCommand(
         for (cert in chain.withIndex()) {
             if (certIndex.isEmpty() || cert.index in certIndex) {
                 certificate(host, cert.value)
+            }
+        }
+        if (certIndex.isEmpty() || chain.size in certIndex) {
+            val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+            trustManagerFactory.init(null as KeyStore?)
+            val issuer = chain.last().issuerX500Principal
+            val rootCertificate = trustManagerFactory.trustManagers
+                .flatMap { t -> (t as X509TrustManager).acceptedIssuers.toList() }
+                .find { it.issuerX500Principal == issuer }
+            if (rootCertificate != null) {
+                certificate(host, rootCertificate)
+            } else {
+                info(host, "No root certificate")
             }
         }
     }

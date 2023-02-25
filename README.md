@@ -31,7 +31,7 @@ export JAVA_HOME=/opt/homebrew/Cellar/openjdk/19.0.2
 Typical use case is to first look at a certificate chain for a server using the following command (replace
 `api.github.com` with the name of the server you are interested in):
 ```shell
-$JAVA_HOME/bin/java -jar build/libs/CertificateHelper-1.4.0-alpha-uber.jar -i api.github.com
+$JAVA_HOME/bin/java -jar build/libs/CertificateHelper-1.5.0-alpha-uber.jar -i api.github.com
 ```
 To simplify the command, consider defining a Shell function (for Bash or Zsh). Assuming you are in the top-level
 directory of the cloned repository, use something like
