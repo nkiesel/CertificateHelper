@@ -8,7 +8,7 @@ file (optionally Base64 encoded).
 
 ## Installation
 
-You can then build the Jar using `./gradew uber` to generate an "uber" (or "fat") Jar, or download that Jar from the
+You can build the Jar using `./gradew uber` to generate an "uber" (or "fat") Jar, or download that Jar from the
 "Releases" page.  If you build the Jar yourself, then you will find it in `build/libs`.
 
 The code is built using Java 17 and thus requires Java 17 or higher to execute it. Some examples on how to install if it is
