@@ -95,6 +95,7 @@ Options:
   --generate-completion [bash|zsh|fish]
   -i, --input TEXT                                     Input file or server name; - for stdin (default: -)
   -f, --inputFormat [SERVER|CONFIG|PEM|BASE64|VAULT]   Input format (default: SERVER)
+  -n, --hostName                                       Server name from config key
   -k, --key TEXT                                       Config key
   -p, --port INT                                       Server port (default: 443)
   -o, --output TEXT                                    Output file name; - for stdout (default: -)
@@ -121,11 +122,21 @@ All these assume you use the `ch` function described above.
     ```shell
     ch -i api.github.com 
     ```
-2. Show leaf certificate of `api.github.com` in OpenSSL text format
+2. Show the summary of the certificate chain of configured host for partner `github` in `default.json`
+    ```shell
+    ch --input default.json -f config --key github.tls.caBundleBase64
+    ch --input default.json -f config --key github
+    ```
+3. Show the summary of the certificate chain of configured host for partner `github` in `default.json`
+    ```shell
+    ch --input default.json -f config --key github --hostName 
+    ```
+4. Show leaf certificate of `api.github.com` in text format
     ```shell
     ch -i api.github.com -t pem -c 0 | openssl x509 -noout -text
+    ch -i api.github.com -t text -c 0
     ```
-3. Update Base64-encoded certificate in `config.json` file from current server 
+5. Update Base64-encoded certificate chain in `config.json` file from current server 
     ```shell
-    ch -i api.github.com -t config -k github.tls.caBundle -o config.json
+    ch -i api.github.com -t config -k github -o config.json
     ```

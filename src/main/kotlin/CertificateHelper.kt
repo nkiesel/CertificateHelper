@@ -25,6 +25,7 @@ import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.options.convert
 import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.split
 import com.github.ajalt.clikt.parameters.types.enum
@@ -102,6 +103,8 @@ class CertificateHelper : CliktCommand(
     private val input by option("-i", "--input", help = "Input file or server name; - for stdin").default("-")
     private val inputFormat by option("-f", "--inputFormat", help = "Input format").enum<InputFormat>()
         .default(InputFormat.SERVER)
+
+    private val hostName by option("-n", "--hostName", help = "Server name from config key").flag()
     private val key by option("-k", "--key", help = "Config key")
     private val port by option("-p", "--port", help = "Server port").int().default(443)
     private val output by option("-o", "--output", help = "Output file name; - for stdout").default("-")
@@ -185,7 +188,10 @@ class CertificateHelper : CliktCommand(
     }
 
     private fun handleServer() {
-        val host = if (input == "-") readln() else input
+        handleServer(if (input == "-") readln() else input)
+    }
+
+    private fun handleServer(host: String) {
         val tm = object : X509TrustManager {
             var chain: Array<X509Certificate>? = null
 
@@ -249,8 +255,6 @@ class CertificateHelper : CliktCommand(
                 .find { it.issuerX500Principal == issuer }
             if (rootCertificate != null) {
                 certificate(host, rootCertificate)
-            } else {
-                info(host, "No root certificate")
             }
         }
     }
@@ -260,6 +264,7 @@ class CertificateHelper : CliktCommand(
         return when {
             configKey.isNullOrBlank() -> null
             "." in configKey -> configKey
+            hostName -> "$configKey.tls.hostName"
             else -> "$configKey.tls.caBundleBase64"
         }
     }
@@ -271,6 +276,7 @@ class CertificateHelper : CliktCommand(
             info(input, "Key is required for config files")
             return
         }
+
         var json: JsonElement? = Json.parseToJsonElement(config)
         for (comp in configKey.split(".")) {
             json = json?.jsonObject?.get(comp)
@@ -279,7 +285,12 @@ class CertificateHelper : CliktCommand(
             info(input, "Cannot extract $configKey")
             return
         }
-        chain(input, json.jsonPrimitive.content.base64Decode().inputStream())
+
+        if (hostName) {
+            handleServer(json.jsonPrimitive.content)
+        } else {
+            chain(input, json.jsonPrimitive.content.base64Decode().inputStream())
+        }
     }
 
     private fun getVaultKey(): String? {
@@ -381,8 +392,9 @@ class CertificateHelper : CliktCommand(
             with(writer) {
                 with(cert as X509Certificate) {
                     println("\n$name: X509 v$version certificate for ${cn(subjectX500Principal)}")
-                    println("\tSHA256 fingerprint: ${encoded.sha256Hex()}")
-                    println("\tSHA256 public key: ${publicKey.encoded.sha256Hex()}")
+                    println("\tCertificate fingerprint: ${encoded.sha256Hex()}")
+                    println("\tPublic key fingerprint: ${publicKey.encoded.sha256Hex()}")
+                    println("\tPublic key fingerprint base64: ${publicKey.encoded.sha256().base64Encode()}")
                     println("\tIssuer: ${cn(issuerX500Principal)}")
                     println("\tExpires: ${this.notAfter.toInstant()}")
                     val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }
@@ -391,7 +403,7 @@ class CertificateHelper : CliktCommand(
                     }
                     val emails = subjectAlternativeNames?.mapNotNull { email(it) }
                     if (!emails.isNullOrEmpty()) {
-                        println("\temails: $emails")
+                        println("\tEmails: $emails")
                     }
                 }
             }
