@@ -31,6 +31,7 @@ import com.github.ajalt.clikt.parameters.options.split
 import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.int
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -58,7 +59,7 @@ fun ByteArray.base64Encode(): String = Base64.getEncoder().encodeToString(this)
 fun String.base64Encode(): String = encodeToByteArray().base64Encode()
 
 enum class InputFormat {
-    SERVER, CONFIG, PEM, BASE64, VAULT
+    SERVER, JSON, PEM, BASE64, VAULT, CONFIG
 }
 
 enum class OutputFormat {
@@ -124,6 +125,7 @@ class CertificateHelper : CliktCommand(
         when (inputFormat) {
             InputFormat.PEM, InputFormat.BASE64 -> handlePEM()
             InputFormat.SERVER -> handleServer()
+            InputFormat.JSON -> handleJson()
             InputFormat.CONFIG -> handleConfig()
             InputFormat.VAULT -> handleVault()
         }
@@ -137,13 +139,13 @@ class CertificateHelper : CliktCommand(
         }
         when {
             output == "-" -> println(final)
-            outputFormat == OutputFormat.CONFIG -> updateConfig(final)
+            outputFormat == OutputFormat.CONFIG -> updateJson(final)
             else -> Path(output).writeText(final)
         }
     }
 
     @OptIn(ExperimentalSerializationApi::class)
-    private fun updateConfig(content: String) {
+    private fun updateJson(content: String) {
         val config = Path(output).readText()
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
@@ -172,7 +174,7 @@ class CertificateHelper : CliktCommand(
                 InputFormat.BASE64 -> stdin.base64Decode().inputStream()
                 else -> stdin.byteInputStream()
             }
-            chain(input, inputStream)
+            chain(input, inputStream, mutableSetOf())
         } else {
             val path = Path(input)
             if (path.isReadable() && path.isRegularFile()) {
@@ -180,7 +182,7 @@ class CertificateHelper : CliktCommand(
                     InputFormat.BASE64 -> path.readText().base64Decode().inputStream()
                     else -> path.inputStream()
                 }
-                chain(path.toString(), inputStream)
+                chain(path.toString(), inputStream, mutableSetOf())
             } else {
                 info(input, "Not a readable regular file")
             }
@@ -188,10 +190,10 @@ class CertificateHelper : CliktCommand(
     }
 
     private fun handleServer() {
-        handleServer(if (input == "-") readln() else input)
+        handleServer(if (input == "-") readln() else input, mutableSetOf())
     }
 
-    private fun handleServer(host: String) {
+    private fun handleServer(host: String, fingerprints: MutableSet<String>) {
         val tm = object : X509TrustManager {
             var chain: Array<X509Certificate>? = null
 
@@ -243,7 +245,7 @@ class CertificateHelper : CliktCommand(
         }
         for (cert in chain.withIndex()) {
             if (certIndex.isEmpty() || cert.index in certIndex) {
-                certificate(host, cert.value)
+                certificate(host, cert.value, fingerprints)
             }
         }
         if (certIndex.isEmpty() || chain.size in certIndex) {
@@ -254,22 +256,25 @@ class CertificateHelper : CliktCommand(
                 .flatMap { t -> (t as X509TrustManager).acceptedIssuers.toList() }
                 .find { it.issuerX500Principal == issuer }
             if (rootCertificate != null) {
-                certificate(host, rootCertificate)
+                certificate(host, rootCertificate, fingerprints)
+            }
+        }
+
+        fingerprints(fingerprints)
+    }
+
+    private fun fingerprints(fingerprints: Set<String>) {
+        if (fingerprints.isNotEmpty()) {
+            with(writer) {
+                println("\nRemaining configured fingerprints:")
+                for (fp in fingerprints) println("\t$fp")
             }
         }
     }
 
-    private fun getConfigKey(): String? {
-        val configKey = key
-        return when {
-            configKey.isNullOrBlank() -> null
-            "." in configKey -> configKey
-            hostName -> "$configKey.tls.hostName"
-            else -> "$configKey.tls.caBundleBase64"
-        }
-    }
+    private fun getConfigKey() = key.takeUnless { it.isNullOrBlank() }
 
-    private fun handleConfig() {
+    private fun handleJson() {
         val config = if (input == "-") readText() else Path(input).readText()
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
@@ -287,9 +292,31 @@ class CertificateHelper : CliktCommand(
         }
 
         if (hostName) {
-            handleServer(json.jsonPrimitive.content)
+            handleServer(json.jsonPrimitive.content, mutableSetOf())
         } else {
-            chain(input, json.jsonPrimitive.content.base64Decode().inputStream())
+            chain(input, json.jsonPrimitive.content.base64Decode().inputStream(), mutableSetOf())
+        }
+    }
+
+    private fun handleConfig() {
+        val config = if (input == "-") readText() else Path(input).readText()
+        val configKey = getConfigKey()
+        if (configKey.isNullOrBlank()) {
+            info(input, "Key is required for config files")
+            return
+        }
+
+        val json = Json.parseToJsonElement(config).jsonObject[configKey]
+        if (json == null) {
+            info(input, "Cannot extract $configKey")
+            return
+        }
+        val partner = Json { ignoreUnknownKeys = true }.decodeFromString<EAC>(Json.encodeToString(json))
+
+        if (hostName) {
+            handleServer(partner.tls.hostName, partner.tls.fingerprints256.toMutableSet())
+        } else {
+            chain(input, partner.tls.caBundleBase64.base64Decode().inputStream(), partner.tls.fingerprints256.toMutableSet())
         }
     }
 
@@ -349,23 +376,24 @@ class CertificateHelper : CliktCommand(
             when (outputFormat) {
                 OutputFormat.BASE64 -> println(data)
                 OutputFormat.PEM -> println(data.base64Decode().decodeToString())
-                else -> chain(input, data.base64Decode().inputStream())
+                else -> chain(input, data.base64Decode().inputStream(), mutableSetOf())
             }
         }
     }
 
-    private fun chain(name: String, inputStream: InputStream) {
+    private fun chain(name: String, inputStream: InputStream, fingerprints: MutableSet<String>) {
         inputStream.use { stream ->
             try {
                 for (cert in certificateFactory.generateCertificates(stream).withIndex()) {
                     if (certIndex.isEmpty() || cert.index in certIndex) {
-                        certificate(name, cert.value)
+                        certificate(name, cert.value, fingerprints)
                     }
                 }
             } catch (e: Exception) {
                 info(name, "Could not read as X509 certificate")
             }
         }
+        fingerprints(fingerprints)
     }
 
     private fun readText() = generateSequence(::readLine).joinToString("\n")
@@ -374,27 +402,33 @@ class CertificateHelper : CliktCommand(
         println("\n$name: $info")
     }
 
-    private fun certificate(name: String, cert: Certificate) {
+    private fun certificate(name: String, cert: Certificate, fingerprints: MutableSet<String>) {
         when (outputFormat) {
-            OutputFormat.SUMMARY -> certificateSummary(name, cert)
+            OutputFormat.SUMMARY -> certificateSummary(name, cert, fingerprints)
             OutputFormat.TEXT -> certificateText(name, cert)
             OutputFormat.BASE64, OutputFormat.PEM, OutputFormat.CONFIG -> certificatePem(cert)
         }
     }
 
-    private fun certificateSummary(name: String, cert: Certificate) {
+    private fun certificateSummary(name: String, cert: Certificate, fingerprints: MutableSet<String>) {
         fun dns(altName: List<*>): String? = if (altName[0] as Int == 2) altName[1] as String else null
         fun email(altName: List<*>): String? = if (altName[0] as Int == 1) altName[1] as String else null
         fun cn(principal: X500Principal) =
             principal.name.let { name -> LdapName(name).rdns.find { it.type == "CN" }?.value ?: name }
+        fun fingerprint(data: ByteArray, onRecord: MutableSet<String>): String {
+            return buildString {
+                val fp = data.sha256Hex()
+                append(fp)
+                if (onRecord.remove(fp)) append(" [on Record]")
+            }
+        }
 
         try {
             with(writer) {
                 with(cert as X509Certificate) {
                     println("\n$name: X509 v$version certificate for ${cn(subjectX500Principal)}")
-                    println("\tCertificate fingerprint: ${encoded.sha256Hex()}")
-                    println("\tPublic key fingerprint: ${publicKey.encoded.sha256Hex()}")
-                    println("\tPublic key fingerprint base64: ${publicKey.encoded.sha256().base64Encode()}")
+                    println("\tCertificate fingerprint: ${fingerprint(encoded, fingerprints)}")
+                    println("\tPublic key fingerprint: ${fingerprint(publicKey.encoded, fingerprints)}")
                     println("\tIssuer: ${cn(issuerX500Principal)}")
                     println("\tExpires: ${this.notAfter.toInstant()}")
                     val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }
