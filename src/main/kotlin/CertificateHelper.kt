@@ -19,6 +19,7 @@ import javax.security.auth.x500.X500Principal
 import kotlin.io.path.*
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import com.github.ajalt.clikt.completion.CompletionCandidates
 import com.github.ajalt.clikt.completion.completionOption
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.context
@@ -101,22 +102,21 @@ class CertificateHelper : CliktCommand(
         completionOption()
     }
 
-    private val input by option("-i", "--input", help = "Input file or server name; - for stdin").default("-")
+    private val input by option("-i", "--input", completionCandidates = CompletionCandidates.Path,
+        help = "Input file or server name; - for stdin").default("-")
     private val inputFormat by option("-f", "--inputFormat", help = "Input format").enum<InputFormat>()
         .default(InputFormat.SERVER)
-
     private val hostName by option("-n", "--hostName", help = "Server name from config key").flag()
     private val key by option("-k", "--key", help = "Config key")
     private val port by option("-p", "--port", help = "Server port").int().default(443)
-    private val output by option("-o", "--output", help = "Output file name; - for stdout").default("-")
+    private val output by option("-o", "--output", completionCandidates = CompletionCandidates.Path,
+        help = "Output file name; - for stdout").default("-")
     private val outputFormat by option("-t", "--outputFormat", help = "Output format").enum<OutputFormat>()
         .default(OutputFormat.SUMMARY)
-    private val certIndex: List<Int> by option(
-        "-c",
-        "--certIndex",
-        help = "Certificate indices (comma-separated)"
-    ).int().split(",").default(emptyList(), defaultForHelp = "all certificates")
-    private val timeout by option(help = "Server connection timeout; 0s for no timeout").convert { Duration.parse(it) }.default(5.seconds)
+    private val certIndex: List<Int> by option("-c", "--certIndex", help = "Certificate indices (comma-separated)")
+        .int().split(",").default(emptyList(), defaultForHelp = "all certificates")
+    private val timeout by option(help = "Server connection timeout; 0s for no timeout")
+        .convert { Duration.parse(it) }.default(5.seconds)
 
     private val content = StringWriter()
     private val writer = PrintWriter(content)
@@ -413,22 +413,21 @@ class CertificateHelper : CliktCommand(
     private fun certificateSummary(name: String, cert: Certificate, fingerprints: MutableSet<String>) {
         fun dns(altName: List<*>): String? = if (altName[0] as Int == 2) altName[1] as String else null
         fun email(altName: List<*>): String? = if (altName[0] as Int == 1) altName[1] as String else null
-        fun cn(principal: X500Principal) =
-            principal.name.let { name -> LdapName(name).rdns.find { it.type == "CN" }?.value ?: name }
-        fun fingerprint(data: ByteArray, onRecord: MutableSet<String>): String {
-            return buildString {
-                val fp = data.sha256Hex()
-                append(fp)
-                if (onRecord.remove(fp)) append(" [on Record]")
-            }
+        fun cn(principal: X500Principal) = principal.name.let { name ->
+            LdapName(name).rdns.find { it.type == "CN" }?.value ?: name
+        }
+        fun fingerprint(data: ByteArray) = buildString {
+            val fp = data.sha256Hex()
+            append(fp)
+            if (fingerprints.remove(fp)) append(" [on Record]")
         }
 
         try {
             with(writer) {
                 with(cert as X509Certificate) {
                     println("\n$name: X509 v$version certificate for ${cn(subjectX500Principal)}")
-                    println("\tCertificate fingerprint: ${fingerprint(encoded, fingerprints)}")
-                    println("\tPublic key fingerprint: ${fingerprint(publicKey.encoded, fingerprints)}")
+                    println("\tCertificate fingerprint: ${fingerprint(encoded)}")
+                    println("\tPublic key fingerprint: ${fingerprint(publicKey.encoded)}")
                     println("\tIssuer: ${cn(issuerX500Principal)}")
                     println("\tExpires: ${this.notAfter.toInstant()}")
                     val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }
