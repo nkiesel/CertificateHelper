@@ -102,15 +102,19 @@ class CertificateHelper : CliktCommand(
         completionOption()
     }
 
-    private val input by option("-i", "--input", completionCandidates = CompletionCandidates.Path,
-        help = "Input file or server name; - for stdin").default("-")
+    private val input by option(
+        "-i", "--input", completionCandidates = CompletionCandidates.Path,
+        help = "Input file or server name; - for stdin"
+    ).default("-")
     private val inputFormat by option("-f", "--inputFormat", help = "Input format").enum<InputFormat>()
         .default(InputFormat.SERVER)
     private val hostName by option("-n", "--hostName", help = "Server name from config key").flag()
     private val key by option("-k", "--key", help = "Config key")
     private val port by option("-p", "--port", help = "Server port").int().default(443)
-    private val output by option("-o", "--output", completionCandidates = CompletionCandidates.Path,
-        help = "Output file name; - for stdout").default("-")
+    private val output by option(
+        "-o", "--output", completionCandidates = CompletionCandidates.Path,
+        help = "Output file name; - for stdout"
+    ).default("-")
     private val outputFormat by option("-t", "--outputFormat", help = "Output format").enum<OutputFormat>()
         .default(OutputFormat.SUMMARY)
     private val certIndex: List<Int> by option("-c", "--certIndex", help = "Certificate indices (comma-separated)")
@@ -120,6 +124,13 @@ class CertificateHelper : CliktCommand(
 
     private val content = StringWriter()
     private val writer = PrintWriter(content)
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private val parser = Json {
+        ignoreUnknownKeys = true
+        prettyPrint = true
+        prettyPrintIndent = "  "
+    }
 
     override fun run() {
         when (inputFormat) {
@@ -144,7 +155,6 @@ class CertificateHelper : CliktCommand(
         }
     }
 
-    @OptIn(ExperimentalSerializationApi::class)
     private fun updateJson(content: String) {
         val config = Path(output).readText()
         val configKey = getConfigKey()
@@ -153,13 +163,9 @@ class CertificateHelper : CliktCommand(
             return
         }
         try {
-            val json = Json.parseToJsonElement(config).jsonObject
+            val json = parser.parseToJsonElement(config).jsonObject
             val updated = setJsonValue(json, configKey, content)
-            val format = Json {
-                prettyPrint = true
-                prettyPrintIndent = "  "
-            }
-            Path(output).writeText(format.encodeToString(updated))
+            Path(output).writeText(parser.encodeToString(updated))
         } catch (e: Exception) {
             info(output, "Cannot parse as JSON")
             return
@@ -282,7 +288,7 @@ class CertificateHelper : CliktCommand(
             return
         }
 
-        var json: JsonElement? = Json.parseToJsonElement(config)
+        var json: JsonElement? = parser.parseToJsonElement(config)
         for (comp in configKey.split(".")) {
             json = json?.jsonObject?.get(comp)
         }
@@ -306,12 +312,12 @@ class CertificateHelper : CliktCommand(
             return
         }
 
-        val json = Json.parseToJsonElement(config).jsonObject[configKey]
+        val json = parser.parseToJsonElement(config).jsonObject[configKey]
         if (json == null) {
             info(input, "Cannot extract $configKey")
             return
         }
-        val partner = Json { ignoreUnknownKeys = true }.decodeFromString<EAC>(Json.encodeToString(json))
+        val partner = parser.decodeFromString<EAC>(parser.encodeToString(json))
 
         if (hostName) {
             handleServer(partner.tls.hostName, partner.tls.fingerprints256.toMutableSet())
@@ -365,7 +371,7 @@ class CertificateHelper : CliktCommand(
             info(input, "Vault did not return data")
             return
         }
-        val json: JsonElement = Json.parseToJsonElement(response.bodyString())
+        val json: JsonElement = parser.parseToJsonElement(response.bodyString())
         val data = json.jsonObject["data"]?.jsonObject?.get("value")?.jsonPrimitive?.content
         if (data == null) {
             info(input, "Vault did not return expected JSON")
@@ -416,6 +422,7 @@ class CertificateHelper : CliktCommand(
         fun cn(principal: X500Principal) = principal.name.let { name ->
             LdapName(name).rdns.find { it.type == "CN" }?.value ?: name
         }
+
         fun fingerprint(data: ByteArray) = buildString {
             val fp = data.sha256Hex()
             append(fp)
