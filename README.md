@@ -31,7 +31,7 @@ export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-19.jdk/Contents/Home
 Typical use case is to first look at a certificate chain for a server using the following command (replace
 `api.github.com` with the name of the server you are interested in):
 ```shell
-$JAVA_HOME/bin/java -jar build/libs/CertificateHelper-1.5.0-alpha-uber.jar -i api.github.com
+$JAVA_HOME/bin/java -jar build/libs/CertificateHelper-1.5.0-uber.jar -f server -i api.github.com
 ```
 To simplify the command, consider defining a Shell function (for Bash or Zsh). Assuming you are in the top-level
 directory of the cloned repository, use something like
@@ -43,7 +43,7 @@ function ch {
   $JAVA_HOME/bin/java -jar $ch_jar "$@"
 }
 ```
-which simplifies the command to `ch -i api.github.com`.
+which simplifies the command to `ch -f server -i api.github.com`.
 This results in something like
 ```text
 api.github.com: X509 certificate for *.github.com
@@ -64,7 +64,7 @@ PEM using `... -t base64 -o github.b64`.
 The program can also read certificates from files (in PEM or Base-64-encoded PEM format), or extract them from JSON
 configuration files:
 ```shell
-ch -f config -i config/dev.json -k github.tls.caBundleBase64
+ch -f json -i config/dev.json -k github.tls.caBundleBase64
 ```
 will print the summary of a Base64-encoded PEM chain stored in `config/dev.json` under the path
 ```json
@@ -76,33 +76,38 @@ will print the summary of a Base64-encoded PEM chain stored in `config/dev.json`
   }
 }
 ```
-Note: for historical reasons, a key w/o any `.` will have `.tls.caBundleBase64` appended, and thus the above
-command could be shortened to `... -f config -i config/dev.json -k github`.
+
+For historical reasons, a JSON config file in a proprietary format can be used with `--inputFormat=CONFIG`, 
+where key will be extended by `.tls.hostName` for hostname lookups and by `.tls.caBundleBase64` otherwise. Thus, the 
+above command for such config files could be further shortened to
+```shell
+ch -i config/dev.json -k github
+```
 
 If you are only interested in a single certificate instead of the whole certificate chain, then you can use the 
 `--certIndex` option to select that certificate. The leaf certificate always has index 0.  Thus, to only get the 
-leaf certificate from a server, add `-c 0`.
+leaf certificate from a server, add `-c 0`, and use `-c0,3` to get the 1st and 4th certificate in a chain.
 
 Run `ch --help` to see all the options:
 ```text
 Usage: ch [OPTIONS]
 
-  Reads or updates certificates from server, file, or vault. Example:
+  Reads or updates certificates from server, config, file, or vault. Example:
 
   ch -f server -i api.github.com
 
 Options:
   --generate-completion [bash|zsh|fish]
-  -i, --input TEXT                                     Input file or server name; - for stdin (default: -)
-  -f, --inputFormat [SERVER|CONFIG|PEM|BASE64|VAULT]   Input format (default: SERVER)
-  -n, --hostName                                       Server name from config key
-  -k, --key TEXT                                       Config key
-  -p, --port INT                                       Server port (default: 443)
-  -o, --output TEXT                                    Output file name; - for stdout (default: -)
-  -t, --outputFormat [SUMMARY|TEXT|PEM|BASE64|CONFIG]  Output format (default: SUMMARY)
-  -c, --certIndex INT                                  Certificate indices (comma-separated) (default: all certificates)
-  --timeout VALUE                                      Server connection timeout; 0s for no timeout (default: 5s)
-  -h, --help                                           Show this message and exit
+  -i, --input TEXT                                         Input file or server name; - for stdin (default: -)
+  -f, --inputFormat [SERVER|JSON|PEM|BASE64|VAULT|CONFIG]  Input format (default: CONFIG)
+  -n, --hostName                                           Server name from config key
+  -k, --key TEXT                                           Config key
+  -p, --port INT                                           Server port (default: 443)
+  -o, --output TEXT                                        Output file name; - for stdout (default: -)
+  -t, --outputFormat [SUMMARY|TEXT|PEM|BASE64|CONFIG]      Output format (default: SUMMARY)
+  -c, --certIndex INT                                      Certificate indices (comma-separated) (default: all certificates)
+  --timeout VALUE                                          Server connection timeout; 0s for no timeout (default: 5s)
+  -h, --help                                               Show this message and exit
 
 Vault operations need a current vault token. This can be provided either via the environment variable VAULT_TOKEN, or via the file
 $HOME/.vault-token. The latter is automatically created when using the command "vault login". The token (normally valid for 24
@@ -112,7 +117,10 @@ top-right user menu.
 ```
 
 Note: The `text` output format is a non-standard format and not the usual `openssl x509 -text` format. If you need
-the latter, use `CerificateHelper` to get the certificates in PEM format and then pipe them into `openssl`.
+the latter, use `ch` to get the certificates in PEM format and then pipe them into `openssl`: 
+```shell
+ `ch -f SERVER -i api.github.com -t PEM -c0 | openssl x509 -noout -text`
+```
 
 ## Examples
 
@@ -120,23 +128,23 @@ All these assume you use the `ch` function described above.
 
 1. Show the summary of the certificate chain of server `api.github.com`
     ```shell
-    ch -i api.github.com 
+    ch -f server -i api.github.com 
     ```
 2. Show the summary of the certificate chain of configured host for partner `github` in `default.json`
     ```shell
-    ch --input default.json -f config --key github.tls.caBundleBase64
-    ch --input default.json -f config --key github
+    ch --input default.json -f json --key github.tls.caBundleBase64
+    ch --input default.json -k github
     ```
 3. Show the summary of the certificate chain of configured host for partner `github` in `default.json`
     ```shell
-    ch --input default.json -f config --key github --hostName 
+    ch --input default.json --key github --hostName 
     ```
 4. Show leaf certificate of `api.github.com` in text format
     ```shell
-    ch -i api.github.com -t pem -c 0 | openssl x509 -noout -text
-    ch -i api.github.com -t text -c 0
+    ch -f server -i api.github.com -t pem -c 0 | openssl x509 -noout -text
+    ch -f server -i api.github.com -t text -c 0
     ```
 5. Update Base64-encoded certificate chain in `config.json` file from current server 
     ```shell
-    ch -i api.github.com -t config -k github -o config.json
+    ch -f server -i api.github.com -t config -k github -o config.json
     ```

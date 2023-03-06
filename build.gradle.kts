@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "io.nkiesel"
-version = "1.5.0-alpha"
+version = "1.5.0"
 
 repositories {
     mavenCentral()
@@ -43,6 +43,6 @@ tasks.register<Jar>("uberJar") {
 
     dependsOn(configurations.runtimeClasspath)
     from({
-        configurations.runtimeClasspath.get().filter { it.name.endsWith("jar") }.map { zipTree(it) }
+        configurations.runtimeClasspath.get().filter { it.name.endsWith(".jar") }.map { zipTree(it) }
     })
 }

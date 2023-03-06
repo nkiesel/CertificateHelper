@@ -76,7 +76,7 @@ fun main(args: Array<String>) {
 class CertificateHelper : CliktCommand(
     name = "ch",
     help = """
-        Reads or updates certificates from server, file, or vault.  Example:
+        Reads or updates certificates from server, config, file, or vault.  Example:
         ```
         ch -f server -i api.github.com
         ```
@@ -96,6 +96,7 @@ class CertificateHelper : CliktCommand(
             helpFormatter = CliktHelpFormatter(
                 showDefaultValues = true,
                 showRequiredTag = true,
+                maxColWidth = 80,
                 maxWidth = 130
             )
         }
@@ -107,7 +108,7 @@ class CertificateHelper : CliktCommand(
         help = "Input file or server name; - for stdin"
     ).default("-")
     private val inputFormat by option("-f", "--inputFormat", help = "Input format").enum<InputFormat>()
-        .default(InputFormat.SERVER)
+        .default(InputFormat.CONFIG)
     private val hostName by option("-n", "--hostName", help = "Server name from config key").flag()
     private val key by option("-k", "--key", help = "Config key")
     private val port by option("-p", "--port", help = "Server port").int().default(443)
@@ -151,12 +152,12 @@ class CertificateHelper : CliktCommand(
         }
         when {
             output == "-" -> println(final)
-            outputFormat == OutputFormat.CONFIG -> updateJson(final)
+            outputFormat == OutputFormat.CONFIG -> updateConfig(final)
             else -> Path(output).writeText(final)
         }
     }
 
-    private fun updateJson(content: String) {
+    private fun updateConfig(content: String) {
         val config = Path(output).readText()
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
@@ -165,7 +166,7 @@ class CertificateHelper : CliktCommand(
         }
         try {
             val json = parser.parseToJsonElement(config).jsonObject
-            val updated = setJsonValue(json, configKey, content)
+            val updated = setJsonValue(json, "$configKey.tls.caBundleBase64", content)
             Path(output).writeText(parser.encodeToString(updated))
         } catch (e: Exception) {
             info(output, "Cannot parse as JSON")
