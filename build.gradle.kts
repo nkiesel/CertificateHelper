@@ -37,7 +37,10 @@ tasks.withType<Test>().configureEach {
 tasks.register<Jar>("uberJar") {
     archiveClassifier.set("uber")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    manifest { attributes(mapOf("Main-Class" to application.mainClass)) }
+    manifest { attributes(mapOf(
+        "Main-Class" to application.mainClass,
+        "Implementation-Version" to version,
+    )) }
 
     from(sourceSets.main.get().output)
 

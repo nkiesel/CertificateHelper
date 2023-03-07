@@ -29,6 +29,7 @@ import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.split
+import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.int
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -68,6 +69,7 @@ enum class OutputFormat {
 }
 
 private const val VAULT_ADDR = "https://hashicorp-vault.corp.creditkarma.com:6661"
+private const val VERSION = "1.5.0"
 
 fun main(args: Array<String>) {
     CertificateHelper().main(args)
@@ -101,6 +103,7 @@ class CertificateHelper : CliktCommand(
             )
         }
         completionOption()
+        versionOption(VERSION, names = setOf("-v", "--version"))
     }
 
     private val input by option(
