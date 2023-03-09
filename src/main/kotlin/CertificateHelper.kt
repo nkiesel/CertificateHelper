@@ -69,7 +69,7 @@ enum class OutputFormat {
 }
 
 private const val VAULT_ADDR = "https://hashicorp-vault.corp.creditkarma.com:6661"
-private const val VERSION = "1.5.0"
+private const val VERSION = "1.6.0-alpha"
 
 fun main(args: Array<String>) {
     CertificateHelper().main(args)
@@ -113,6 +113,7 @@ class CertificateHelper : CliktCommand(
     private val inputFormat by option("-f", "--inputFormat", help = "Input format").enum<InputFormat>()
         .default(InputFormat.CONFIG)
     private val hostName by option("-n", "--hostName", help = "Server name from config key").flag()
+    private val jwe by option("-j", "--jwe", help = "JWE info from config").flag()
     private val key by option("-k", "--key", help = "Config key")
     private val port by option("-p", "--port", help = "Server port").int().default(443)
     private val output by option(
@@ -313,10 +314,10 @@ class CertificateHelper : CliktCommand(
         val partner = parser.decodeFromString<EAC>(parser.encodeToString(json))
         fingerprints += partner.tls.fingerprints256
 
-        if (hostName) {
-            handleServer(partner.tls.hostName)
-        } else {
-            chain(input, partner.tls.caBundleBase64.base64Decode().inputStream())
+        when {
+            hostName -> handleServer(partner.tls.hostName)
+            jwe -> chain(input, partner.api.JWEPublicKeyBase64.base64Decode().inputStream())
+            else -> chain(input, partner.tls.caBundleBase64.base64Decode().inputStream())
         }
     }
 
@@ -404,7 +405,7 @@ class CertificateHelper : CliktCommand(
             }
         }
 
-        if (outputFormat == OutputFormat.SUMMARY && fingerprints.isNotEmpty()) {
+        if (!jwe && outputFormat == OutputFormat.SUMMARY && fingerprints.isNotEmpty()) {
             with(writer) {
                 println("\nRemaining configured fingerprints:")
                 for (fp in fingerprints) println("\t$fp")
