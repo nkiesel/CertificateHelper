@@ -71,6 +71,27 @@ enum class OutputFormat {
 private const val VAULT_ADDR = "https://hashicorp-vault.corp.creditkarma.com:6661"
 private const val VERSION = "1.6.0-alpha"
 
+private val keyUsages = arrayOf(
+    "Digital signature",
+    "Non-repudiation",
+    "Key encipherment",
+    "Data encipherment",
+    "Key agreement",
+    "Certificate signing",
+    "CRL signing",
+    "Encipher only",
+    "Decipher only",
+)
+
+private val extendedKeyUsages = mapOf(
+    "1.3.6.1.5.5.7.3.1" to "Server authentication",
+    "1.3.6.1.5.5.7.3.2" to "Client authentication",
+    "1.3.6.1.5.5.7.3.3" to "Code signing",
+    "1.3.6.1.5.5.7.3.4" to "Email",
+    "1.3.6.1.5.5.7.3.8" to "Timestamping",
+    "1.3.6.1.5.5.7.3.9[a]" to "OCSP Signing",
+)
+
 fun main(args: Array<String>) {
     CertificateHelper().main(args)
 }
@@ -423,7 +444,9 @@ class CertificateHelper : CliktCommand(
 
     private fun certificateSummary(name: String, cert: Certificate) {
         fun dns(altName: List<*>): String? = if (altName[0] as Int == 2) altName[1] as String else null
+
         fun email(altName: List<*>): String? = if (altName[0] as Int == 1) altName[1] as String else null
+
         fun cn(principal: X500Principal) = principal.name.let { name ->
             LdapName(name).rdns.find { it.type == "CN" }?.value ?: name
         }
@@ -434,19 +457,31 @@ class CertificateHelper : CliktCommand(
             if (fingerprints.remove(fp)) append(" [on Record]")
         }
 
+        fun keyUsage(data: BooleanArray) =
+            data.mapIndexed { idx, b -> if (b && idx in keyUsages.indices) keyUsages[idx] else null }
+                .filterNotNull().joinToString()
+
+        fun extKeyUsage(data: List<String>) = data.joinToString { extendedKeyUsages[it] ?: "???" }
+
         try {
             with(writer) {
                 with(cert as X509Certificate) {
                     println("\n$name: X509 v$version certificate for ${cn(subjectX500Principal)}")
                     println("\tCertificate fingerprint: ${fingerprint(encoded)}")
                     println("\tPublic key fingerprint: ${fingerprint(publicKey.encoded)}")
-                    println("\tIssuer: ${cn(issuerX500Principal)}")
                     println("\tExpires: ${this.notAfter.toInstant()}")
-                    val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }
+                    println("\tIssuer: ${cn(issuerX500Principal)}")
+                    if (keyUsage.isNotEmpty()) {
+                        println("\tKey Usage: ${keyUsage(keyUsage)}")
+                    }
+                    if (!extendedKeyUsage.isNullOrEmpty()) {
+                        println("\tExtended Key Usage: ${extKeyUsage(extendedKeyUsage)}")
+                    }
+                    val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }?.joinToString()
                     if (!dnsNames.isNullOrEmpty()) {
                         println("\tDNS names: $dnsNames")
                     }
-                    val emails = subjectAlternativeNames?.mapNotNull { email(it) }
+                    val emails = subjectAlternativeNames?.mapNotNull { email(it) }?.joinToString()
                     if (!emails.isNullOrEmpty()) {
                         println("\tEmails: $emails")
                     }
