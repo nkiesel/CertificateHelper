@@ -124,7 +124,7 @@ class CertificateHelper : CliktCommand(
             )
         }
         completionOption()
-        versionOption(VERSION, names = setOf("-v", "--version"))
+        versionOption(javaClass.getResourceAsStream("version").bufferedReader().use { it.readLine() }, names = setOf("-v", "--version"))
     }
 
     private val input by option(

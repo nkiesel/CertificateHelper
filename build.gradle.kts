@@ -1,3 +1,7 @@
+import kotlin.io.path.Path
+import kotlin.io.path.createDirectories
+import kotlin.io.path.writeText
+
 plugins {
     kotlin("jvm") version "1.8.10"
     kotlin("plugin.serialization") version "1.8.10"
@@ -5,7 +9,7 @@ plugins {
 }
 
 group = "io.nkiesel"
-version = "1.6.0-alpha"
+version = "1.6.1-alpha"
 
 repositories {
     mavenCentral()
@@ -48,4 +52,27 @@ tasks.register<Jar>("uberJar") {
     from({
         configurations.runtimeClasspath.get().filter { it.name.endsWith(".jar") }.map { zipTree(it) }
     })
+}
+
+val versionFile = Path("$buildDir/generated/version")
+
+sourceSets {
+    main {
+        kotlin {
+            output.dir(versionFile.parent)
+        }
+    }
+}
+
+tasks.register("generateVersionProperties") {
+    doLast {
+        with(versionFile) {
+            parent.createDirectories()
+            writeText("$version")
+        }
+    }
+}
+
+tasks.named("processResources") {
+    dependsOn("generateVersionProperties")
 }
