@@ -443,9 +443,11 @@ class CertificateHelper : CliktCommand(
     }
 
     private fun certificateSummary(name: String, cert: Certificate) {
-        fun dns(altName: List<*>): String? = if (altName[0] as Int == 2) altName[1] as String else null
+        fun altName(altName: List<*>, type: Int) = (altName[1] as String).takeIf { altName[0] as Int == type }
 
-        fun email(altName: List<*>): String? = if (altName[0] as Int == 1) altName[1] as String else null
+        fun dns(altNames: List<*>) = altName(altNames, 2)
+
+        fun email(altNames: List<*>) = altName(altNames, 1)
 
         fun cn(principal: X500Principal) = principal.name.let { name ->
             LdapName(name).rdns.find { it.type == "CN" }?.value ?: name
@@ -471,10 +473,11 @@ class CertificateHelper : CliktCommand(
                     println("\tPublic key fingerprint: ${fingerprint(publicKey.encoded)}")
                     println("\tExpires: ${this.notAfter.toInstant()}")
                     println("\tIssuer: ${cn(issuerX500Principal)}")
-                    if (keyUsage.isNotEmpty()) {
+                    // All the remaining properties can be `null`
+                    if (keyUsage != null && keyUsage.isNotEmpty()) {
                         println("\tKey Usage: ${keyUsage(keyUsage)}")
                     }
-                    if (!extendedKeyUsage.isNullOrEmpty()) {
+                    if (extendedKeyUsage != null && extendedKeyUsage.isNotEmpty()) {
                         println("\tExtended Key Usage: ${extKeyUsage(extendedKeyUsage)}")
                     }
                     val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }?.joinToString()
