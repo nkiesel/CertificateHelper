@@ -45,6 +45,7 @@ import org.http4k.core.Method
 import org.http4k.core.Request
 import org.http4k.core.Uri
 import org.http4k.core.appendToPath
+import java.net.InetAddress
 
 
 private val sha256 = MessageDigest.getInstance("SHA-256")
@@ -69,7 +70,6 @@ enum class OutputFormat {
 }
 
 private const val VAULT_ADDR = "https://hashicorp-vault.corp.creditkarma.com:6661"
-private const val VERSION = "1.6.0-alpha"
 
 private val keyUsages = arrayOf(
     "Digital signature",
@@ -124,7 +124,10 @@ class CertificateHelper : CliktCommand(
             )
         }
         completionOption()
-        versionOption(javaClass.getResourceAsStream("version").bufferedReader().use { it.readLine() }, names = setOf("-v", "--version"))
+        versionOption(
+            javaClass.getResourceAsStream("version")?.bufferedReader()?.use { it.readLine() } ?: "development",
+            names = setOf("-v", "--version")
+        )
     }
 
     private val input by option(
@@ -226,7 +229,7 @@ class CertificateHelper : CliktCommand(
         handleServer(if (input == "-") readln() else input)
     }
 
-    private fun handleServer(host: String) {
+    private fun getChain(host: String, address: InetAddress): List<X509Certificate> {
         val tm = object : X509TrustManager {
             var chain: Array<X509Certificate>? = null
 
@@ -247,11 +250,11 @@ class CertificateHelper : CliktCommand(
         // connect twice: first to make sure we can connect; and then to extract the certificates
         try {
             SSLSocketFactory.getDefault().createSocket().use {
-                it.connect(InetSocketAddress(host, port), timeout.inWholeMilliseconds.toInt())
+                it.connect(InetSocketAddress(address, port), timeout.inWholeMilliseconds.toInt())
             }
         } catch (e: Exception) {
-            info(host, "Could not connect within $timeout")
-            return
+            info(host, "Could not connect to $address within $timeout")
+            return emptyList()
         }
 
         val socketFactory = tlsContext.apply {
@@ -259,10 +262,10 @@ class CertificateHelper : CliktCommand(
         }.socketFactory
 
         val sslSocket = try {
-            socketFactory.createSocket(host, port) as SSLSocket
+            socketFactory.createSocket(address, port) as SSLSocket
         } catch (e: Exception) {
-            info(host, "Could not connect")
-            return
+            info(host, "Could not connect to $address")
+            return emptyList()
         }
         sslSocket.use {
             try {
@@ -273,8 +276,8 @@ class CertificateHelper : CliktCommand(
 
         val chain = tm.chain?.toMutableList()
         if (chain == null) {
-            info(host, "Could not obtain server certificate chain")
-            return
+            info(host, "Could not obtain server certificate chain for $address")
+            return emptyList()
         }
 
         if (certIndex.isEmpty() || chain.size in certIndex) {
@@ -289,7 +292,22 @@ class CertificateHelper : CliktCommand(
             }
         }
 
-        process(host, chain)
+        return chain
+    }
+
+    private fun handleServer(host: String) {
+        val addresses = InetAddress.getAllByName(host)
+        val count = addresses.size
+        info(host, "Addresses: ${addresses.map { it.hostAddress }}")
+
+        val chains = addresses.map { getChain(host, it) }
+
+        if (count == 1 || chains.map { it[0].encoded.sha256Hex() }.distinct().size == 1) {
+            process(host, chains.first())
+        } else {
+            info(host, "Different certificates for different addresses")
+            addresses.forEachIndexed { i, a -> process(a.hostAddress, chains[i]) }
+        }
     }
 
     private fun getConfigKey() = key.takeUnless { it.isNullOrBlank() }
@@ -337,7 +355,7 @@ class CertificateHelper : CliktCommand(
 
         when {
             hostName -> handleServer(partner.tls.hostName)
-            jwe -> chain(input, partner.api.JWEPublicKeyBase64.base64Decode().inputStream())
+            jwe -> chain(input, partner.api?.JWEPublicKeyBase64?.base64Decode()?.inputStream())
             else -> chain(input, partner.tls.caBundleBase64.base64Decode().inputStream())
         }
     }
@@ -403,7 +421,11 @@ class CertificateHelper : CliktCommand(
         }
     }
 
-    private fun chain(name: String, inputStream: InputStream) {
+    private fun chain(name: String, inputStream: InputStream?) {
+        if (inputStream == null) {
+            info(name, "No data")
+            return
+        }
         inputStream.use { stream ->
             try {
                 process(name, certificateFactory.generateCertificates(stream).toList())

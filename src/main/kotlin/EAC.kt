@@ -2,7 +2,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class EAC(
-    val api: Api,
+    val api: Api? = null,
 //    val continueUrl: String,
 //    val secondsBetweenHealthchecks: Int,
 //    val statusPageUrlTemplate: String,
