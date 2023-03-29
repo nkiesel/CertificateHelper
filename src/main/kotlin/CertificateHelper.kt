@@ -57,7 +57,7 @@ private val tlsContext = SSLContext.getInstance("TLS")
 fun ByteArray.sha256(): ByteArray = sha256.digest(this)
 fun ByteArray.hex(): String = hexFormat.formatHex(this)
 fun ByteArray.sha256Hex(): String = sha256().hex()
-fun String.base64Decode(): ByteArray = Base64.getDecoder().decode(this)
+fun String.base64Decode(): ByteArray = Base64.getDecoder().decode(this.trim())
 fun ByteArray.base64Encode(): String = Base64.getEncoder().encodeToString(this)
 fun String.base64Encode(): String = encodeToByteArray().base64Encode()
 
@@ -179,7 +179,7 @@ class CertificateHelper : CliktCommand(
             }
         }
         when {
-            output == "-" -> println(final)
+            output == "-" -> print(final)
             outputFormat == OutputFormat.CONFIG -> updateConfig(final)
             else -> Path(output).writeText(final)
         }
@@ -201,7 +201,6 @@ class CertificateHelper : CliktCommand(
             return
         }
     }
-
 
     private fun handlePEM() {
         if (input == "-") {
@@ -298,7 +297,9 @@ class CertificateHelper : CliktCommand(
     private fun handleServer(host: String) {
         val addresses = InetAddress.getAllByName(host)
         val count = addresses.size
-        info(host, "Addresses: ${addresses.map { it.hostAddress }}")
+        if (outputFormat == OutputFormat.SUMMARY || outputFormat == OutputFormat.TEXT) {
+            info(host, "Addresses: ${addresses.map { it.hostAddress }}")
+        }
 
         val chains = addresses.map { getChain(host, it) }
 
@@ -306,7 +307,9 @@ class CertificateHelper : CliktCommand(
             process(host, chains.first())
         } else {
             info(host, "Different certificates for different addresses")
-            addresses.forEachIndexed { i, a -> process(a.hostAddress, chains[i]) }
+            if (outputFormat == OutputFormat.SUMMARY || outputFormat == OutputFormat.TEXT) {
+                addresses.forEachIndexed { i, a -> process(a.hostAddress, chains[i]) }
+            }
         }
     }
 
