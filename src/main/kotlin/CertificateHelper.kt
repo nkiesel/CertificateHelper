@@ -154,6 +154,15 @@ class CertificateHelper : CliktCommand(
     private val content = StringWriter()
     private val writer = PrintWriter(content)
     private val fingerprints = mutableSetOf<String>()
+    private val rootCertificates = getRootCertificates()
+
+    private fun getRootCertificates(): Map<X500Principal, X509Certificate> {
+        val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+        trustManagerFactory.init(null as KeyStore?)
+        return trustManagerFactory.trustManagers
+            .flatMap { t -> (t as X509TrustManager).acceptedIssuers.toList() }
+            .associateBy { it.subjectX500Principal }
+    }
 
     @OptIn(ExperimentalSerializationApi::class)
     private val parser = Json {
@@ -280,14 +289,13 @@ class CertificateHelper : CliktCommand(
         }
 
         if (certIndex.isEmpty() || chain.size in certIndex) {
-            val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
-            trustManagerFactory.init(null as KeyStore?)
             val issuer = chain.last().issuerX500Principal
-            val rootCertificate = trustManagerFactory.trustManagers
-                .flatMap { t -> (t as X509TrustManager).acceptedIssuers.toList() }
-                .find { it.issuerX500Principal == issuer }
-            if (rootCertificate != null) {
-                chain += rootCertificate
+            // Try to add the root certificate unless the current root is already self-signed
+            if (issuer != chain.last().subjectX500Principal) {
+                val rootCertificate = rootCertificates[issuer]
+                if (rootCertificate != null) {
+                    chain += rootCertificate
+                }
             }
         }
 
@@ -493,7 +501,8 @@ class CertificateHelper : CliktCommand(
         try {
             with(writer) {
                 with(cert as X509Certificate) {
-                    println("\n$name: X509 v$version certificate for ${cn(subjectX500Principal)}")
+                    val certificate = if (rootCertificates.containsKey(subjectX500Principal)) "trusted root certificate" else "certificate"
+                    println("\n$name: X509 v$version $certificate for ${cn(subjectX500Principal)}")
                     println("\tCertificate fingerprint: ${fingerprint(encoded)}")
                     println("\tPublic key fingerprint: ${fingerprint(publicKey.encoded)}")
                     println("\tExpires: ${this.notAfter.toInstant()}")
