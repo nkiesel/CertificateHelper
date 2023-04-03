@@ -3,13 +3,13 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
 plugins {
-    kotlin("jvm") version "1.8.10"
-    kotlin("plugin.serialization") version "1.8.10"
+    kotlin("jvm") version "1.8.20"
+    kotlin("plugin.serialization") version "1.8.20"
     application
 }
 
 group = "io.nkiesel"
-version = "1.6.1-alpha"
+version = "1.6.2-alpha"
 
 repositories {
     mavenCentral()
