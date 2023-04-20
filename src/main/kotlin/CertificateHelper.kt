@@ -46,6 +46,7 @@ import org.http4k.core.Request
 import org.http4k.core.Uri
 import org.http4k.core.appendToPath
 import java.net.InetAddress
+import java.time.Instant
 
 
 private val sha256 = MessageDigest.getInstance("SHA-256")
@@ -139,6 +140,7 @@ class CertificateHelper : CliktCommand(
     private val hostName by option("-n", "--hostName", help = "Server name from config key").flag()
     private val jwe by option("-j", "--jwe", help = "JWE info from config").flag()
     private val key by option("-k", "--key", help = "Config key")
+    private val cleanup by option("--cleanup", help = "Clean up certificates (remove duplicates, drop expired)").flag()
     private val port by option("-p", "--port", help = "Server port").int().default(443)
     private val output by option(
         "-o", "--output", completionCandidates = CompletionCandidates.Path,
@@ -452,8 +454,35 @@ class CertificateHelper : CliktCommand(
         println("\n$name: $info")
     }
 
+    private fun cleanup(list: List<X509Certificate>): List<X509Certificate> {
+        fun findChildren(
+            parents: List<X509Certificate>,
+            candidates: List<X509Certificate>
+        ): Pair<List<X509Certificate>, List<X509Certificate>> {
+            val parentIds = parents.map { it.subjectX500Principal }
+            return candidates.partition { it.issuerX500Principal in parentIds }
+        }
+
+        val now = Instant.now()
+        var (roots, children) = list
+            .filter { it.notAfter.toInstant() >= now }
+            .distinctBy { it.subjectX500Principal }
+            .sortedBy { cert -> cert.notAfter }
+            .partition { it.subjectX500Principal == it.issuerX500Principal }
+
+        while (children.isNotEmpty()) {
+            findChildren(roots, children).let {
+                roots = roots + it.first
+                children = it.second
+            }
+        }
+
+        return roots.reversed()
+    }
+
     private fun process(name: String, certificates: List<Certificate>) {
-        for (cert in certificates.withIndex()) {
+        val certs = certificates.map { it as X509Certificate }.let { if (cleanup) cleanup(it) else it }
+        for (cert in certs.withIndex()) {
             if (certIndex.isEmpty() || cert.index in certIndex) {
                 certificate(name, cert.value)
             }
@@ -467,7 +496,7 @@ class CertificateHelper : CliktCommand(
         }
     }
 
-    private fun certificate(name: String, cert: Certificate) {
+    private fun certificate(name: String, cert: X509Certificate) {
         when (outputFormat) {
             OutputFormat.SUMMARY -> certificateSummary(name, cert)
             OutputFormat.TEXT -> certificateText(name, cert)
@@ -475,7 +504,7 @@ class CertificateHelper : CliktCommand(
         }
     }
 
-    private fun certificateSummary(name: String, cert: Certificate) {
+    private fun certificateSummary(name: String, cert: X509Certificate) {
         fun altName(altName: List<*>, type: Int) = (altName[1] as String).takeIf { altName[0] as Int == type }
 
         fun dns(altNames: List<*>) = altName(altNames, 2)
@@ -500,9 +529,9 @@ class CertificateHelper : CliktCommand(
 
         try {
             with(writer) {
-                with(cert as X509Certificate) {
-                    val certificate = if (rootCertificates.containsKey(subjectX500Principal)) "trusted root certificate" else "certificate"
-                    println("\n$name: X509 v$version $certificate for ${cn(subjectX500Principal)}")
+                with(cert) {
+                    val root = if (rootCertificates.containsKey(subjectX500Principal)) "trusted root " else ""
+                    println("\n$name: X509 v$version ${root}certificate for ${cn(subjectX500Principal)}")
                     println("\tCertificate fingerprint: ${fingerprint(encoded)}")
                     println("\tPublic key fingerprint: ${fingerprint(publicKey.encoded)}")
                     println("\tExpires: ${this.notAfter.toInstant()}")
