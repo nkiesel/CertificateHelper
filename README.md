@@ -3,38 +3,38 @@
 ## Overview
 
 This is a simple helper program to handle X509 certificates in various formats. It allows to download the full
-certificate chain from a server (up to and including the root certificate) and show a summary or store it as a PEM
+certificate chain from a server (up to and including the root certificate), and show a summary or store it as a PEM
 file (optionally Base64 encoded).
 
 ## Installation
 
-You can build the Jar using `./gradew uber` to generate an "uber" (or "fat") Jar, or download that Jar from the
-"Releases" page.  If you build the Jar yourself, then you will find it in `build/libs`.
-
-The code is built using Java 17 and thus requires Java 17 or higher to execute it. Some examples on how to install if it is
-missing:
- - Debian: `apt install openjdk-17-jre`
- - MacOS: `brew install openjdk` (which currently installs Java 19) or `brew install openjdk@17`.
+The code is built using Java 17 and thus requires Java 17 or higher to execute it. Some examples on how to install 
+if it is missing:
+ - Debian: `apt install openjdk-17-jdk`
+ - MacOS: `brew install openjdk@17`
 
 If you install it, then this also often requires to set the JAVA_HOME environment variable correctly:
 ```shell
 # for Debian
 export JAVA_HOME=/var/lib/jdk/openjdk-17
-# for MacOS with Java 17
+# for MacOS
 export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home
-# for MacOS with Java 19
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-19.jdk/Contents/Home
 ```
+
+Once you have Java 17 installed, you can build the Jar using `./gradlew clean uber` to generate an "uber" (or "fat") 
+jar (which includes all the 3rd party dependencies). This will produce a single jar file in `build/libs`.  You can
+then test the build running `java -jar build/libs/*.jar --help`. If this complains about Java not found or being an 
+incompatible version, try `$JAVA_HOME/bin/java -jar build/libs/*.jar --help`.
 
 ## Usage
 
 Typical use case is to first look at a certificate chain for a server using the following command (replace
 `api.github.com` with the name of the server you are interested in):
 ```shell
-$JAVA_HOME/bin/java -jar build/libs/CertificateHelper-1.5.0-uber.jar -f server -i api.github.com
+$JAVA_HOME/bin/java -jar build/libs/CertificateHelper-*-uber.jar -f server -i api.github.com
 ```
 To simplify the command, consider defining a Shell function (for Bash or Zsh). Assuming you are in the top-level
-directory of the cloned repository, use something like
+directory of the cloned repository, use
 ```shell
 jar=$(realpath build/libs/*-uber.jar)
 function ch {
