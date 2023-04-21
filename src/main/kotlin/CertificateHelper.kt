@@ -535,34 +535,34 @@ class CertificateHelper : CliktCommand(
 
         fun extKeyUsage(data: List<String>) = data.joinToString { extendedKeyUsages[it] ?: "???" }
 
-        try {
-            with(writer) {
-                with(cert) {
-                    val root = if (rootCertificates.containsKey(subjectX500Principal)) "trusted root " else ""
-                    println("\n$name: X509 v$version ${root}certificate for ${cn(subjectX500Principal)}")
-                    println("\tCertificate fingerprint: ${fingerprint(encoded)}")
-                    println("\tPublic key fingerprint: ${fingerprint(publicKey.encoded)}")
-                    println("\tExpires: ${this.notAfter.toInstant()}")
-                    println("\tIssuer: ${cn(issuerX500Principal)}")
-                    // All the remaining properties can be `null`
-                    if (keyUsage?.isNotEmpty() == true) {
-                        println("\tKey Usage: ${keyUsage(keyUsage)}")
-                    }
-                    if (extendedKeyUsage?.isNotEmpty() == true) {
-                        println("\tExtended Key Usage: ${extKeyUsage(extendedKeyUsage)}")
-                    }
-                    val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }?.joinToString()
-                    if (dnsNames?.isNotEmpty() == true) {
-                        println("\tDNS names: $dnsNames")
-                    }
-                    val emails = subjectAlternativeNames?.mapNotNull { email(it) }?.joinToString()
-                    if (emails?.isNotEmpty() == true) {
-                        println("\tEmails: $emails")
-                    }
+        with(writer) {
+            with(cert) {
+                val root = if (rootCertificates.containsKey(subjectX500Principal)) "trusted root " else ""
+                println("\n$name: X509 v$version ${root}certificate for ${cn(subjectX500Principal)}")
+                println("\tCertificate fingerprint: ${fingerprint(encoded)}")
+                println("\tPublic key fingerprint: ${fingerprint(publicKey.encoded)}")
+                val notBeforeInstant = notBefore.toInstant()
+                if (notBeforeInstant > Instant.now()) {
+                    println("\tNot Before: $notBeforeInstant")
+                }
+                println("\tExpires: ${notAfter.toInstant()}")
+                println("\tIssuer: ${cn(issuerX500Principal)}")
+                // All the remaining properties can be `null`
+                if (keyUsage?.isNotEmpty() == true) {
+                    println("\tKey Usage: ${keyUsage(keyUsage)}")
+                }
+                if (extendedKeyUsage?.isNotEmpty() == true) {
+                    println("\tExtended Key Usage: ${extKeyUsage(extendedKeyUsage)}")
+                }
+                val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }?.joinToString()
+                if (dnsNames?.isNotEmpty() == true) {
+                    println("\tDNS names: $dnsNames")
+                }
+                val emails = subjectAlternativeNames?.mapNotNull { email(it) }?.joinToString()
+                if (emails?.isNotEmpty() == true) {
+                    println("\tEmails: $emails")
                 }
             }
-        } catch (e: Exception) {
-            info(name, "Could not read as X509 certificate")
         }
     }
 
