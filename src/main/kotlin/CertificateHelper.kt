@@ -545,18 +545,18 @@ class CertificateHelper : CliktCommand(
                     println("\tExpires: ${this.notAfter.toInstant()}")
                     println("\tIssuer: ${cn(issuerX500Principal)}")
                     // All the remaining properties can be `null`
-                    if (keyUsage != null && keyUsage.isNotEmpty()) {
+                    if (keyUsage?.isNotEmpty() == true) {
                         println("\tKey Usage: ${keyUsage(keyUsage)}")
                     }
-                    if (!extendedKeyUsage.isNullOrEmpty()) {
+                    if (extendedKeyUsage?.isNotEmpty() == true) {
                         println("\tExtended Key Usage: ${extKeyUsage(extendedKeyUsage)}")
                     }
                     val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }?.joinToString()
-                    if (!dnsNames.isNullOrEmpty()) {
+                    if (dnsNames?.isNotEmpty() == true) {
                         println("\tDNS names: $dnsNames")
                     }
                     val emails = subjectAlternativeNames?.mapNotNull { email(it) }?.joinToString()
-                    if (!emails.isNullOrEmpty()) {
+                    if (emails?.isNotEmpty() == true) {
                         println("\tEmails: $emails")
                     }
                 }
