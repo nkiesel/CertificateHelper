@@ -4,7 +4,6 @@ import java.io.StringWriter
 import java.net.InetSocketAddress
 import java.security.KeyStore
 import java.security.MessageDigest
-import java.security.cert.Certificate
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 import java.util.*
@@ -92,6 +91,8 @@ private val extendedKeyUsages = mapOf(
     "1.3.6.1.5.5.7.3.8" to "Timestamping",
     "1.3.6.1.5.5.7.3.9[a]" to "OCSP Signing",
 )
+
+typealias X509List = List<X509Certificate>
 
 fun main(args: Array<String>) {
     CertificateHelper().main(args)
@@ -239,9 +240,9 @@ class CertificateHelper : CliktCommand(
         handleServer(if (input == "-") readln() else input)
     }
 
-    private fun getChain(host: String, address: InetAddress): List<X509Certificate> {
+    private fun getChain(host: String, address: InetAddress): X509List {
         val tm = object : X509TrustManager {
-            var chain: Array<X509Certificate>? = null
+            var chain: X509List? = null
 
             override fun getAcceptedIssuers(): Array<X509Certificate> {
                 throw UnsupportedOperationException()
@@ -252,7 +253,7 @@ class CertificateHelper : CliktCommand(
             }
 
             override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
-                this.chain = chain
+                this.chain = chain.toList()
             }
         }
 
@@ -441,7 +442,7 @@ class CertificateHelper : CliktCommand(
         }
         inputStream.use { stream ->
             try {
-                process(name, certificateFactory.generateCertificates(stream).toList())
+                process(name, certificateFactory.generateCertificates(stream).map { it as X509Certificate })
             } catch (e: Exception) {
                 info(name, "Could not read as X509 certificate")
             }
@@ -454,34 +455,41 @@ class CertificateHelper : CliktCommand(
         println("\n$name: $info")
     }
 
-    private fun cleanup(list: List<X509Certificate>): List<X509Certificate> {
-        fun findChildren(
-            parents: List<X509Certificate>,
-            candidates: List<X509Certificate>
-        ): Pair<List<X509Certificate>, List<X509Certificate>> {
+    /**
+     * This removes duplicates and expired certificates from the list. It also sorts the certificates
+     * so that issuers of a certificate - if they are part of the list - come after the certificate.
+     */
+    private fun cleanup(list: X509List): X509List {
+        /**
+         *  Split the [candidates] into 2 lists: those who have an issuer in the [parents] list, and the rest
+         */
+        fun findChildren(parents: X509List, candidates: X509List): Pair<X509List, X509List> {
             val parentIds = parents.map { it.subjectX500Principal }
             return candidates.partition { it.issuerX500Principal in parentIds }
         }
 
+        // Filter and sort and split into root certs and the rest
         val now = Instant.now()
-        var (roots, children) = list
+        var (issuers, candidates) = list
             .filter { it.notAfter.toInstant() >= now }
             .distinctBy { it.subjectX500Principal }
             .sortedBy { cert -> cert.notAfter }
             .partition { it.subjectX500Principal == it.issuerX500Principal }
 
-        while (children.isNotEmpty()) {
-            findChildren(roots, children).let {
-                roots = roots + it.first
-                children = it.second
+        // Add immediate children of issuers to issuers
+        while (candidates.isNotEmpty()) {
+            findChildren(issuers, candidates).let {
+                issuers += it.first
+                candidates = it.second
             }
         }
 
-        return roots.reversed()
+        // We want the leaf certs first, so reversing the list
+        return issuers.reversed()
     }
 
-    private fun process(name: String, certificates: List<Certificate>) {
-        val certs = certificates.map { it as X509Certificate }.let { if (cleanup) cleanup(it) else it }
+    private fun process(name: String, certificates: X509List) {
+        val certs = if (cleanup) cleanup(certificates) else certificates
         for (cert in certs.withIndex()) {
             if (certIndex.isEmpty() || cert.index in certIndex) {
                 certificate(name, cert.value)
@@ -540,7 +548,7 @@ class CertificateHelper : CliktCommand(
                     if (keyUsage != null && keyUsage.isNotEmpty()) {
                         println("\tKey Usage: ${keyUsage(keyUsage)}")
                     }
-                    if (extendedKeyUsage != null && extendedKeyUsage.isNotEmpty()) {
+                    if (!extendedKeyUsage.isNullOrEmpty()) {
                         println("\tExtended Key Usage: ${extKeyUsage(extendedKeyUsage)}")
                     }
                     val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }?.joinToString()
@@ -558,14 +566,14 @@ class CertificateHelper : CliktCommand(
         }
     }
 
-    private fun certificateText(name: String, cert: Certificate) {
+    private fun certificateText(name: String, cert: X509Certificate) {
         with(writer) {
             println(name)
             println(cert)
         }
     }
 
-    private fun certificatePem(cert: Certificate) {
+    private fun certificatePem(cert: X509Certificate) {
         with(writer) {
             println("-----BEGIN CERTIFICATE-----")
             println(pemEncoder.encodeToString(cert.encoded))
