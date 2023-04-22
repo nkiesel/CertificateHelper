@@ -18,8 +18,8 @@ repositories {
 dependencies {
     implementation("com.github.ajalt.clikt:clikt:3.5.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.0")
-    implementation("org.http4k:http4k-core:4.41.3.0")
-    implementation("org.http4k:http4k-client-okhttp:4.41.3.0")
+    implementation("org.http4k:http4k-core:4.41.4.0")
+    implementation("org.http4k:http4k-client-okhttp:4.41.4.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.2")
