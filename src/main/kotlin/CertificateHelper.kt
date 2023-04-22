@@ -61,6 +61,10 @@ fun String.base64Decode(): ByteArray = Base64.getDecoder().decode(this.trim())
 fun ByteArray.base64Encode(): String = Base64.getEncoder().encodeToString(this)
 fun String.base64Encode(): String = encodeToByteArray().base64Encode()
 
+fun <T> List<T>?.hasContent() = !this.isNullOrEmpty()
+fun String?.hasContent() = !this.isNullOrEmpty()
+fun BooleanArray?.hasContent() = this != null && this.isNotEmpty()
+
 enum class InputFormat {
     SERVER, JSON, PEM, BASE64, VAULT, CONFIG
 }
@@ -548,18 +552,18 @@ class CertificateHelper : CliktCommand(
                 println("\tExpires: ${notAfter.toInstant()}")
                 println("\tIssuer: ${cn(issuerX500Principal)}")
                 // All the remaining properties can be `null`
-                if (keyUsage?.isNotEmpty() == true) {
+                if (keyUsage.hasContent()) {
                     println("\tKey Usage: ${keyUsage(keyUsage)}")
                 }
-                if (extendedKeyUsage?.isNotEmpty() == true) {
+                if (extendedKeyUsage.hasContent()) {
                     println("\tExtended Key Usage: ${extKeyUsage(extendedKeyUsage)}")
                 }
                 val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }?.joinToString()
-                if (dnsNames?.isNotEmpty() == true) {
+                if (dnsNames.hasContent()) {
                     println("\tDNS names: $dnsNames")
                 }
                 val emails = subjectAlternativeNames?.mapNotNull { email(it) }?.joinToString()
-                if (emails?.isNotEmpty() == true) {
+                if (emails.hasContent()) {
                     println("\tEmails: $emails")
                 }
             }
