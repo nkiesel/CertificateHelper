@@ -110,10 +110,7 @@ Options:
   -h, --help                                               Show this message and exit
 
 Vault operations need a current vault token. This can be provided either via the environment variable VAULT_TOKEN, or via the file
-$HOME/.vault-token. The latter is automatically created when using the command "vault login". The token (normally valid for 24
-hours) can be generated after signing into the vault using the URL (requires Okta Yubikey authentication)
-https://hashicorp-vault.corp.creditkarma.com:6661/ui/vault/auth?with=okta_oidc and then using the "Copy Token" menu entry from the
-top-right user menu.
+$HOME/.vault-token. The latter is automatically created when using the command "vault login".
 ```
 
 Note: The `text` output format is a non-standard format and not the usual `openssl x509 -text` format. If you need
