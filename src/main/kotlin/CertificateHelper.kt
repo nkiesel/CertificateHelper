@@ -156,7 +156,8 @@ class CertificateHelper : CliktCommand(
 
     private val content = StringWriter()
     private val writer = PrintWriter(content)
-    private val fingerprints = mutableSetOf<String>()
+    private val configuredFingerprints = mutableSetOf<String>()
+    private val seenFingerprints = mutableSetOf<String>()
     private val rootCertificates = getRootCertificates()
 
     private fun getRootCertificates(): Map<X500Principal, X509Certificate> {
@@ -365,7 +366,7 @@ class CertificateHelper : CliktCommand(
         }
 
         val partner = parser.decodeFromString<EAC>(parser.encodeToString(json))
-        fingerprints += partner.tls.fingerprints256
+        configuredFingerprints += partner.tls.fingerprints256
 
         when {
             hostName -> handleServer(partner.tls.hostName)
@@ -404,7 +405,7 @@ class CertificateHelper : CliktCommand(
             return
         }
         val vaultToken = getVaultToken()
-        if (vaultKey.isBlank()) {
+        if (vaultToken.isBlank()) {
             info(input, "Token is required for vault")
             return
         }
@@ -496,10 +497,13 @@ class CertificateHelper : CliktCommand(
             }
         }
 
-        if (!jwe && outputFormat == OutputFormat.SUMMARY && fingerprints.isNotEmpty()) {
-            with(writer) {
-                println("\nRemaining configured fingerprints:")
-                for (fp in fingerprints) println("\t$fp")
+        if (!jwe && outputFormat == OutputFormat.SUMMARY) {
+            val unseenFingerprints = configuredFingerprints - seenFingerprints
+            if (unseenFingerprints.isNotEmpty()) {
+                with(writer) {
+                    println("\nRemaining configured fingerprints:")
+                    for (fp in unseenFingerprints) println("\t$fp")
+                }
             }
         }
     }
@@ -526,7 +530,8 @@ class CertificateHelper : CliktCommand(
         fun fingerprint(data: ByteArray) = buildString {
             val fp = data.sha256Hex()
             append(fp)
-            if (fingerprints.remove(fp)) append(" [on Record]")
+            if (fp in configuredFingerprints) append(" [on Record]")
+            seenFingerprints += fp
         }
 
         fun keyUsage(data: BooleanArray) =
