@@ -73,8 +73,6 @@ enum class OutputFormat {
     SUMMARY, TEXT, PEM, BASE64, CONFIG
 }
 
-private const val VAULT_ADDR = "https://hashicorp-vault.corp.creditkarma.com:6661"
-
 private val keyUsages = arrayOf(
     "Digital signature",
     "Non-repudiation",
@@ -115,8 +113,6 @@ class CertificateHelper : CliktCommand(
     the environment variable VAULT_TOKEN, or via the file ${'$'}HOME/.vault-token.
     The latter is automatically created when using the command "vault login". The
     token (normally valid for 24 hours) can be generated after signing into the vault
-    using the URL (requires Okta Yubikey authentication)
-    ${VAULT_ADDR}/ui/vault/auth?with=okta_oidc
     and then using the "Copy Token" menu entry from the top-right user menu.
     """.trimIndent(),
 ) {
@@ -392,7 +388,7 @@ class CertificateHelper : CliktCommand(
     private fun getVaultHost(): String {
         return when {
             input != "-" -> input
-            else -> getEnv("VAULT_ADDR") ?: VAULT_ADDR
+            else -> getEnv("VAULT_ADDR") ?: ""
         }
     }
 
