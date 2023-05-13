@@ -98,10 +98,13 @@ Usage: ch [OPTIONS]
 
 Options:
   --generate-completion [bash|zsh|fish]
+  -v, --version                                            Show the version and exit
   -i, --input TEXT                                         Input file or server name; - for stdin (default: -)
   -f, --inputFormat [SERVER|JSON|PEM|BASE64|VAULT|CONFIG]  Input format (default: CONFIG)
   -n, --hostName                                           Server name from config key
+  -j, --jwe                                                JWE info from config
   -k, --key TEXT                                           Config key
+  --cleanup                                                Clean up certificates (remove duplicates, drop expired)
   -p, --port INT                                           Server port (default: 443)
   -o, --output TEXT                                        Output file name; - for stdout (default: -)
   -t, --outputFormat [SUMMARY|TEXT|PEM|BASE64|CONFIG]      Output format (default: SUMMARY)
@@ -110,7 +113,8 @@ Options:
   -h, --help                                               Show this message and exit
 
 Vault operations need a current vault token. This can be provided either via the environment variable VAULT_TOKEN, or via the file
-$HOME/.vault-token. The latter is automatically created when using the command "vault login".
+$HOME/.vault-token. The latter is automatically created when using the command "vault login". The token (normally valid for 24
+hours) can be generated after signing into the vault and then using the "Copy Token" menu entry from the top-right user menu.
 ```
 
 Note: The `text` output format is a non-standard format and not the usual `openssl x509 -text` format. If you need
