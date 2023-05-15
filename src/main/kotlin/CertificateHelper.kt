@@ -479,9 +479,15 @@ class CertificateHelper : CliktCommand(
 
         // Add immediate children of issuers to issuers
         while (candidates.isNotEmpty()) {
-            findChildren(issuers, candidates).let {
-                issuers += it.first
-                candidates = it.second
+            findChildren(issuers, candidates).let {(children, remaining) ->
+                if (children.isEmpty()) {
+                    // could not find any cert in candidates issued by issuer
+                    issuers += remaining
+                    candidates = emptyList()
+                } else {
+                    issuers += children
+                    candidates = remaining
+                }
             }
         }
 
