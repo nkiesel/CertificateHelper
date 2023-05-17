@@ -282,14 +282,16 @@ class CertificateHelper : CliktCommand(
         }
 
         if (certIndex.isEmpty() || chain.size in certIndex) {
-            val issuer = chain.last().issuerX500Principal
-            // Try to add the root certificate unless the current root is already self-signed
-            if (issuer != chain.last().subjectX500Principal && issuer !in rootCertificates.keys) {
+            do {
+                val last = chain.last()
+                val issuer = last.issuerX500Principal
+                // Try to add the root certificate unless the current root is already self-signed
                 val rootCertificate = rootCertificates[issuer]
-                if (rootCertificate != null) {
-                    chain += rootCertificate
+                if (rootCertificate == null || issuer == last.subjectX500Principal) {
+                    break
                 }
-            }
+                chain += rootCertificate
+            } while (true)
         }
 
         return chain
