@@ -1,38 +1,12 @@
-import java.io.InputStream
-import java.io.PrintWriter
-import java.io.StringWriter
-import java.net.InetSocketAddress
-import java.security.KeyStore
-import java.security.MessageDigest
-import java.security.cert.CertificateFactory
-import java.security.cert.X509Certificate
-import java.util.*
-import javax.naming.ldap.LdapName
-import javax.net.ssl.SSLContext
-import javax.net.ssl.SSLException
-import javax.net.ssl.SSLSocket
-import javax.net.ssl.SSLSocketFactory
-import javax.net.ssl.TrustManagerFactory
-import javax.net.ssl.X509TrustManager
-import javax.security.auth.x500.X500Principal
-import kotlin.io.path.*
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
 import com.github.ajalt.clikt.completion.CompletionCandidates
 import com.github.ajalt.clikt.completion.completionOption
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.context
 import com.github.ajalt.clikt.output.CliktHelpFormatter
-import com.github.ajalt.clikt.parameters.options.convert
-import com.github.ajalt.clikt.parameters.options.default
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.option
-import com.github.ajalt.clikt.parameters.options.split
-import com.github.ajalt.clikt.parameters.options.versionOption
+import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.int
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -44,8 +18,23 @@ import org.http4k.core.Method
 import org.http4k.core.Request
 import org.http4k.core.Uri
 import org.http4k.core.appendToPath
+import java.io.InputStream
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.cert.CertificateFactory
+import java.security.cert.X509Certificate
 import java.time.Instant
+import java.util.*
+import javax.naming.ldap.LdapName
+import javax.net.ssl.*
+import javax.security.auth.x500.X500Principal
+import kotlin.io.path.*
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 
 private val sha256 = MessageDigest.getInstance("SHA-256")
@@ -479,7 +468,7 @@ class CertificateHelper : CliktCommand(
 
         // Add immediate children of issuers to issuers
         while (candidates.isNotEmpty()) {
-            findChildren(issuers, candidates).let {(children, remaining) ->
+            findChildren(issuers, candidates).let { (children, remaining) ->
                 if (children.isEmpty()) {
                     // could not find any cert in candidates issued by issuer
                     issuers += remaining
