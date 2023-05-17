@@ -540,7 +540,8 @@ class CertificateHelper : CliktCommand(
         with(writer) {
             with(cert) {
                 val root = if (rootCertificates.containsKey(subjectX500Principal)) "trusted root " else ""
-                println("\n$name: X509 v$version ${root}certificate for ${cn(subjectX500Principal)}")
+                val selfSigned = if (subjectX500Principal == issuerX500Principal) "self-signed " else ""
+                println("\n$name: X509 v$version ${selfSigned}${root}certificate for ${cn(subjectX500Principal)}")
                 println("\tCertificate fingerprint: ${fingerprint(encoded)}")
                 println("\tPublic key fingerprint: ${fingerprint(publicKey.encoded)}")
                 val notBeforeInstant = notBefore.toInstant()
