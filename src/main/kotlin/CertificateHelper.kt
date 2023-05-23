@@ -127,8 +127,9 @@ class CertificateHelper : CliktCommand(
     ).default("-")
     private val inputFormat by option("-f", "--inputFormat", help = "Input format").enum<InputFormat>()
         .default(InputFormat.CONFIG)
-    private val hostName by option("-n", "--hostName", help = "Server name from config key").flag()
+    private val hostName by option("-n", "--hostName", help = "CA bundle using server name from config").flag()
     private val jwe by option("-j", "--jwe", help = "JWE info from config").flag()
+    private val bundle by option("-b", "--bundle", help = "CA bundle info from config").flag(default = true)
     private val key by option("-k", "--key", help = "Config key")
     private val cleanup by option("--cleanup", help = "Clean up certificates (remove duplicates, drop expired)").flag()
     private val port by option("-p", "--port", help = "Server port").int().default(443)
@@ -357,12 +358,12 @@ class CertificateHelper : CliktCommand(
         }
 
         val partner = parser.decodeFromString<EAC>(parser.encodeToString(json))
-        configuredFingerprints += partner.tls.fingerprints256
+        partner.tls.fingerprints256?.let { configuredFingerprints += it }
 
         when {
             hostName -> handleServer(partner.tls.hostName)
             jwe -> chain(input, partner.api?.JWEPublicKeyBase64?.base64Decode()?.inputStream())
-            else -> chain(input, partner.tls.caBundleBase64.base64Decode().inputStream())
+            bundle -> chain(input, partner.tls.caBundleBase64?.base64Decode()?.inputStream())
         }
     }
 

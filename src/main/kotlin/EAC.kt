@@ -30,8 +30,8 @@ data class Tls(
 //    val path: String,
 //    val healthCheckPath: String,
 //    val ciphers: String,
-    val caBundleBase64: String,
-    val fingerprints256: List<String>,
+    val caBundleBase64: String? = null,
+    val fingerprints256: List<String>? = null,
 //    val clientCertificateBase64: String,
 //    val clientPrivateKeyBase64: ClientPrivateKeyBase64
 )
