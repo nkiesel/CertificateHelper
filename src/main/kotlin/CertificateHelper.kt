@@ -306,8 +306,9 @@ class CertificateHelper : CliktCommand(
         }
 
         val chains = addresses.map { getChain(host, it) }
-
-        if (count == 1 || chains.map { it[0].encoded.sha256Hex() }.distinct().size == 1) {
+        if (chains.any { it.isEmpty() }) {
+            info(host, "Could not get certificate chains for all addresses")
+        } else if (count == 1 || chains.map { it[0].encoded.sha256Hex() }.distinct().size == 1) {
             process(host, chains.first())
         } else {
             info(host, "Different certificates for different addresses")
