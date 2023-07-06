@@ -16,7 +16,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.ajalt.clikt:clikt:3.5.4")
+    implementation("com.github.ajalt.clikt:clikt:4.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
     implementation("org.http4k:http4k-core:4.48.0.0")
     implementation("org.http4k:http4k-client-okhttp:4.48.0.0")

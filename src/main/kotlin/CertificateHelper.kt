@@ -1,8 +1,6 @@
 import com.github.ajalt.clikt.completion.CompletionCandidates
 import com.github.ajalt.clikt.completion.completionOption
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.core.context
-import com.github.ajalt.clikt.output.CliktHelpFormatter
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.int
@@ -106,14 +104,6 @@ class CertificateHelper : CliktCommand(
     """.trimIndent(),
 ) {
     init {
-        context {
-            helpFormatter = CliktHelpFormatter(
-                showDefaultValues = true,
-                showRequiredTag = true,
-                maxColWidth = 80,
-                maxWidth = 130
-            )
-        }
         completionOption()
         versionOption(
             javaClass.getResourceAsStream("version")?.bufferedReader()?.use { it.readLine() } ?: "development",
@@ -257,7 +247,7 @@ class CertificateHelper : CliktCommand(
             return emptyList()
         }
 
-        val kmf: KeyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply {
+        KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply {
             init(null, "".toCharArray())
         }
         val socketFactory = tlsContext.apply {
