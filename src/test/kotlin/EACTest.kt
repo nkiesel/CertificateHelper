@@ -7,20 +7,12 @@ class EACTest {
     private val json = """
    {
     "api": {
-      "JWEPublicKeyBase64": "abcde",
-      "JWEPrivateKeyBase64": {
-        "_source": "vault",
-        "_key": "jwe_private_key_base64"
-      },
+      "JWEPublicKeyBase64": ["abcde"],
       "timeoutInMs": 60000
     },
     "tls": {
       "hostName": "api.example.com",
-      "caBundleBase64": "abcde",
-      "fingerprints256": [
-        "123",
-        "456"
-      ]
+      "caBundleBase64": "abcde"
     }
   }
     """.trimIndent()

@@ -12,8 +12,8 @@ data class EAC(
 
 @Serializable
 data class Api(
-    val JWEPublicKeyBase64: String,
-    val JWEPrivateKeyBase64: JWEPrivateKeyBase64,
+    val JWEPublicKeyBase64: Array<String>,
+//    val JWEPrivateKeyBase64: Array<JWEPrivateKeyBase64>,
 //    val timeoutInMs: Int
 )
 
@@ -30,8 +30,8 @@ data class Tls(
 //    val path: String,
 //    val healthCheckPath: String,
 //    val ciphers: String,
+    val overrideBundle: Boolean = false,
     val caBundleBase64: String? = null,
-    val fingerprints256: List<String>? = null,
 //    val clientCertificateBase64: String,
 //    val clientPrivateKeyBase64: ClientPrivateKeyBase64
 )

@@ -146,8 +146,6 @@ class CertificateHelper : CliktCommand(
 
     private val content = StringWriter()
     private val writer = PrintWriter(content)
-    private val configuredFingerprints = mutableSetOf<String>()
-    private val seenFingerprints = mutableSetOf<String>()
     private val rootCertificates = getRootCertificates()
 
     private fun getRootCertificates(): Map<X500Principal, X509Certificate> {
@@ -362,11 +360,10 @@ class CertificateHelper : CliktCommand(
         }
 
         val partner = parser.decodeFromString<EAC>(parser.encodeToString(json))
-        partner.tls.fingerprints256?.let { configuredFingerprints += it }
 
         when {
             hostName -> handleServer(partner.tls.hostName)
-            jwe -> chain(input, partner.api?.JWEPublicKeyBase64?.base64Decode()?.inputStream())
+            jwe -> partner.api?.JWEPublicKeyBase64?.forEach { chain(input, it.base64Decode().inputStream()) }
             bundle -> chain(input, partner.tls.caBundleBase64?.base64Decode()?.inputStream())
         }
     }
@@ -498,16 +495,6 @@ class CertificateHelper : CliktCommand(
                 certificate(name, cert.value)
             }
         }
-
-        if (!jwe && outputFormat == OutputFormat.SUMMARY) {
-            val unseenFingerprints = configuredFingerprints - seenFingerprints
-            if (unseenFingerprints.isNotEmpty()) {
-                with(writer) {
-                    println("\nRemaining configured fingerprints:")
-                    for (fp in unseenFingerprints) println("\t$fp")
-                }
-            }
-        }
     }
 
     private fun certificate(name: String, cert: X509Certificate) {
@@ -529,12 +516,7 @@ class CertificateHelper : CliktCommand(
             LdapName(name).rdns.find { it.type == "CN" }?.value ?: name
         }
 
-        fun fingerprint(data: ByteArray) = buildString {
-            val fp = data.sha256Hex()
-            append(fp)
-            if (fp in configuredFingerprints) append(" [on Record]")
-            seenFingerprints += fp
-        }
+        fun fingerprint(data: ByteArray) =  data.sha256Hex()
 
         fun keyUsage(data: BooleanArray) =
             data.mapIndexed { idx, b -> if (b && idx in keyUsages.indices) keyUsages[idx] else null }
