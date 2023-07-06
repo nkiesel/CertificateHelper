@@ -259,6 +259,9 @@ class CertificateHelper : CliktCommand(
             return emptyList()
         }
 
+        val kmf: KeyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply {
+            init(null, "".toCharArray())
+        }
         val socketFactory = tlsContext.apply {
             init(null, arrayOf<X509TrustManager>(tm), null)
         }.socketFactory
