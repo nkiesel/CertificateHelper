@@ -29,12 +29,12 @@ dependencies {
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
+        jvmTarget = JvmTarget.JVM_17
     }
 }
 
 application {
-    mainClass.set("CertificateHelperKt")
+    mainClass = "CertificateHelperKt"
 }
 
 tasks.withType<Test>().configureEach {
@@ -42,7 +42,7 @@ tasks.withType<Test>().configureEach {
 }
 
 tasks.register<Jar>("uberJar") {
-    archiveClassifier.set("uber")
+    archiveClassifier = "uber"
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     manifest { attributes(mapOf(
         "Main-Class" to application.mainClass,
