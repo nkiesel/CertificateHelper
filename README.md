@@ -90,31 +90,32 @@ leaf certificate from a server, add `-c 0`, and use `-c0,3` to get the 1st and 4
 
 Run `ch --help` to see all the options:
 ```text
-Usage: ch [OPTIONS]
+Usage: ch [<options>]
 
   Reads or updates certificates from server, config, file, or vault. Example:
-
-  ch -f server -i api.github.com
+  ╭──────────────────────────────╮
+  │ch -f server -i api.github.com│
+  ╰──────────────────────────────╯
 
 Options:
-  --generate-completion [bash|zsh|fish]
+  --generate-completion=(bash|zsh|fish)
   -v, --version                                            Show the version and exit
-  -i, --input TEXT                                         Input file or server name; - for stdin (default: -)
-  -f, --inputFormat [SERVER|JSON|PEM|BASE64|VAULT|CONFIG]  Input format (default: CONFIG)
-  -n, --hostName                                           Server name from config key
+  -i, --input=<text>                                       Input file or server name; - for stdin
+  -f, --inputFormat=(SERVER|JSON|PEM|BASE64|VAULT|CONFIG)  Input format
+  -n, --hostName                                           CA bundle using server name from config
   -j, --jwe                                                JWE info from config
-  -k, --key TEXT                                           Config key
+  -b, --bundle                                             CA bundle info from config
+  -k, --key=<text>                                         Config key
   --cleanup                                                Clean up certificates (remove duplicates, drop expired)
-  -p, --port INT                                           Server port (default: 443)
-  -o, --output TEXT                                        Output file name; - for stdout (default: -)
-  -t, --outputFormat [SUMMARY|TEXT|PEM|BASE64|CONFIG]      Output format (default: SUMMARY)
-  -c, --certIndex INT                                      Certificate indices (comma-separated) (default: all certificates)
-  --timeout VALUE                                          Server connection timeout; 0s for no timeout (default: 5s)
+  -p, --port=<int>                                         Server port
+  -o, --output=<text>                                      Output file name; - for stdout
+  -t, --outputFormat=(SUMMARY|TEXT|PEM|BASE64|CONFIG)      Output format
+  -c, --certIndex=<int>                                    Certificate indices (comma-separated)
+  --timeout=<value>                                        Server connection timeout; 0s for no timeout
   -h, --help                                               Show this message and exit
 
-Vault operations need a current vault token. This can be provided either via the environment variable VAULT_TOKEN, or via the file
-$HOME/.vault-token. The latter is automatically created when using the command "vault login". The token (normally valid for 24
-hours) can be generated after signing into the vault and then using the "Copy Token" menu entry from the top-right user menu.
+Vault operations need a current vault token. This can be provided either via the environment variable VAULT_TOKEN, or via the file $HOME/.vault-token. The latter is automatically created when using the command "vault login". The token (normally valid for 24 hours) can be generated
+after signing into the vault and then using the "Copy Token" menu entry from the top-right user menu.
 ```
 
 Note: The `text` output format is a non-standard format and not the usual `openssl x509 -text` format. If you need

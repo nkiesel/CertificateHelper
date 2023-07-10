@@ -9,8 +9,8 @@ plugins {
     application
 }
 
-group = "io.nkiesel"
-version = "2.0.0"
+group = "nkiesel.org"
+version = "2.0.1"
 
 repositories {
     mavenCentral()
@@ -19,8 +19,8 @@ repositories {
 dependencies {
     implementation("com.github.ajalt.clikt:clikt:4.0.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
-    implementation("org.http4k:http4k-core:4.48.0.0")
-    implementation("org.http4k:http4k-client-okhttp:4.48.0.0")
+    implementation("org.http4k:http4k-core:5.3.0.0")
+    implementation("org.http4k:http4k-client-okhttp:5.3.0.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.9.3")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.9.3")
