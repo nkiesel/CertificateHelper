@@ -102,12 +102,13 @@ Options:
   -v, --version                                            Show the version and exit
   -i, --input=<text>                                       Input file or server name; - for stdin
   -f, --inputFormat=(SERVER|JSON|PEM|BASE64|VAULT|CONFIG)  Input format
-  -n, --hostName                                           CA bundle using server name from config
-  -j, --jwe                                                JWE info from config
-  -b, --bundle                                             CA bundle info from config
-  -k, --key=<text>                                         Config key
+  -n, --hostName                                           CA bundle using partner server name from config
+  -j, --jwe                                                partner JWE info from config
+  --tls                                                    own TLS info from config
+  -b, --bundle                                             partner CA bundle info from config
+  -k, --key=<text>                                         partner config key
   --cleanup                                                Clean up certificates (remove duplicates, drop expired)
-  -p, --port=<int>                                         Server port
+  -p, --port=<int>                                         partner server port
   -o, --output=<text>                                      Output file name; - for stdout
   -t, --outputFormat=(SUMMARY|TEXT|PEM|BASE64|CONFIG)      Output format
   -c, --certIndex=<int>                                    Certificate indices (comma-separated)

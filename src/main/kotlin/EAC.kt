@@ -32,7 +32,7 @@ data class Tls(
 //    val ciphers: String,
     val overrideBundle: Boolean = false,
     val caBundleBase64: String? = null,
-//    val clientCertificateBase64: String,
+    val clientCertificateBase64: String? = null,
 //    val clientPrivateKeyBase64: ClientPrivateKeyBase64
 )
 

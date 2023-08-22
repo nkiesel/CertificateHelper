@@ -117,12 +117,13 @@ class CertificateHelper : CliktCommand(
     ).default("-")
     private val inputFormat by option("-f", "--inputFormat", help = "Input format").enum<InputFormat>()
         .default(InputFormat.CONFIG)
-    private val hostName by option("-n", "--hostName", help = "CA bundle using server name from config").flag()
-    private val jwe by option("-j", "--jwe", help = "JWE info from config").flag()
-    private val bundle by option("-b", "--bundle", help = "CA bundle info from config").flag(default = true)
-    private val key by option("-k", "--key", help = "Config key")
+    private val hostName by option("-n", "--hostName", help = "CA bundle using partner server name from config").flag()
+    private val jwe by option("-j", "--jwe", help = "partner JWE info from config").flag()
+    private val tls by option("--tls", help = "own TLS info from config").flag()
+    private val bundle by option("-b", "--bundle", help = "partner CA bundle info from config").flag(default = true)
+    private val key by option("-k", "--key", help = "partner config key")
     private val cleanup by option("--cleanup", help = "Clean up certificates (remove duplicates, drop expired)").flag()
-    private val port by option("-p", "--port", help = "Server port").int().default(443)
+    private val port by option("-p", "--port", help = "partner server port").int().default(443)
     private val output by option(
         "-o", "--output", completionCandidates = CompletionCandidates.Path,
         help = "Output file name; - for stdout"
@@ -237,7 +238,7 @@ class CertificateHelper : CliktCommand(
         }
 
         // TODO: could not yet figure out how to combine timeout and cert extraction, so we currently
-        // connect twice: first to make sure we can connect; and then to extract the certificates
+        //  connect twice: first to make sure we can connect; and then to extract the certificates
         try {
             SSLSocketFactory.getDefault().createSocket().use {
                 it.connect(InetSocketAddress(address, port), timeout.inWholeMilliseconds.toInt())
@@ -351,6 +352,7 @@ class CertificateHelper : CliktCommand(
         when {
             hostName -> handleServer(partner.tls.hostName)
             jwe -> partner.api?.JWEPublicKeyBase64?.forEach { chain(input, it.base64Decode().inputStream()) }
+            tls -> partner.tls.clientCertificateBase64?.let { chain(input, it.base64Decode().inputStream()) }
             bundle -> chain(input, partner.tls.caBundleBase64?.base64Decode()?.inputStream())
         }
     }
