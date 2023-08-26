@@ -4,8 +4,8 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
 plugins {
-    kotlin("jvm") version "1.9.0"
-    kotlin("plugin.serialization") version "1.9.0"
+    kotlin("jvm") version "1.9.10"
+    kotlin("plugin.serialization") version "1.9.10"
     application
 }
 
@@ -18,9 +18,10 @@ repositories {
 
 dependencies {
     implementation("com.github.ajalt.clikt:clikt:4.2.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
     implementation("org.http4k:http4k-core:5.7.2.0")
     implementation("org.http4k:http4k-client-okhttp:5.7.2.0")
+    implementation("com.github.ajalt.mordant:mordant:2.1.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")

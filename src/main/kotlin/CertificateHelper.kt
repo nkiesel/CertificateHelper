@@ -4,6 +4,8 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.int
+import com.github.ajalt.mordant.rendering.TextColors.*
+import com.github.ajalt.mordant.terminal.Terminal
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -31,6 +33,7 @@ import javax.naming.ldap.LdapName
 import javax.net.ssl.*
 import javax.security.auth.x500.X500Principal
 import kotlin.io.path.*
+import kotlin.system.exitProcess
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -47,6 +50,8 @@ fun ByteArray.sha256Hex(): String = sha256().hex()
 fun String.base64Decode(): ByteArray = Base64.getDecoder().decode(this.trim())
 fun ByteArray.base64Encode(): String = Base64.getEncoder().encodeToString(this)
 fun String.base64Encode(): String = encodeToByteArray().base64Encode()
+fun ByteArray.fingerprint(): String = sha256Hex()
+
 
 fun <T> List<T>?.hasContent() = !this.isNullOrEmpty()
 fun String?.hasContent() = !this.isNullOrEmpty()
@@ -134,10 +139,12 @@ class CertificateHelper : CliktCommand(
         .int().split(",").default(emptyList(), defaultForHelp = "all certificates")
     private val timeout by option(help = "Server connection timeout; 0s for no timeout")
         .convert { Duration.parse(it) }.default(5.seconds)
+    private val rootCAs by option("--rootCAs", help = "list root CAs, filter with optional regex").optionalValue(".*")
 
     private val content = StringWriter()
     private val writer = PrintWriter(content)
     private val rootCertificates = getRootCertificates()
+    private val terminal = Terminal()
 
     private fun getRootCertificates(): Map<X500Principal, X509Certificate> {
         val trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
@@ -155,6 +162,16 @@ class CertificateHelper : CliktCommand(
     }
 
     override fun run() {
+        val pattern = rootCAs?.toRegex()
+        if (pattern != null) {
+            for (cert in rootCertificates.filter { it.key.toString().contains(pattern) }) {
+                certificateSummary(cert.value)
+            }
+            writer.flush()
+            print(content.toString())
+            exitProcess(0)
+        }
+
         when (inputFormat) {
             InputFormat.PEM, InputFormat.BASE64 -> handlePEM()
             InputFormat.SERVER -> handleServer()
@@ -171,7 +188,7 @@ class CertificateHelper : CliktCommand(
             }
         }
         when {
-            output == "-" -> print(final)
+            output == "-" -> terminal.print(final)
             outputFormat == OutputFormat.CONFIG -> updateConfig(final)
             else -> Path(output).writeText(final)
         }
@@ -244,7 +261,7 @@ class CertificateHelper : CliktCommand(
                 it.connect(InetSocketAddress(address, port), timeout.inWholeMilliseconds.toInt())
             }
         } catch (e: Exception) {
-            info(host, "Could not connect to $address within $timeout")
+            error(host, "Could not connect to $address within $timeout")
             return emptyList()
         }
 
@@ -255,7 +272,7 @@ class CertificateHelper : CliktCommand(
         val sslSocket = try {
             socketFactory.createSocket(address, port) as SSLSocket
         } catch (e: Exception) {
-            info(host, "Could not connect to $address")
+            error(host, "Could not connect to $address")
             return emptyList()
         }
         sslSocket.use {
@@ -267,7 +284,7 @@ class CertificateHelper : CliktCommand(
 
         val chain = tm.chain?.toMutableList()
         if (chain == null) {
-            info(host, "Could not obtain server certificate chain for $address")
+            error(host, "Could not obtain server certificate chain for $address")
             return emptyList()
         }
 
@@ -313,7 +330,7 @@ class CertificateHelper : CliktCommand(
         val config = if (input == "-") readText() else Path(input).readText()
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
-            info(input, "Key is required for config files")
+            error(input, "Key is required for config files")
             return
         }
 
@@ -322,7 +339,7 @@ class CertificateHelper : CliktCommand(
             json = json?.jsonObject?.get(comp)
         }
         if (json == null) {
-            info(input, "Cannot extract $configKey")
+            error(input, "Cannot extract $configKey")
             return
         }
 
@@ -337,13 +354,13 @@ class CertificateHelper : CliktCommand(
         val config = if (input == "-") readText() else Path(input).readText()
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
-            info(input, "Key is required for config files")
+            error(input, "Key is required for config files")
             return
         }
 
         val json = parser.parseToJsonElement(config).jsonObject[configKey]
         if (json == null) {
-            info(input, "Cannot extract $configKey")
+            error(input, "Cannot extract $configKey")
             return
         }
 
@@ -420,14 +437,14 @@ class CertificateHelper : CliktCommand(
 
     private fun chain(name: String, inputStream: InputStream?) {
         if (inputStream == null) {
-            info(name, "No data")
+            error(name, "No data")
             return
         }
         inputStream.use { stream ->
             try {
                 process(name, certificateFactory.generateCertificates(stream).map { it as X509Certificate })
             } catch (e: Exception) {
-                info(name, "Could not read as X509 certificate")
+                error(name, "Could not read as X509 certificate")
             }
         }
     }
@@ -435,7 +452,11 @@ class CertificateHelper : CliktCommand(
     private fun readText() = generateSequence(::readLine).joinToString("\n")
 
     private fun info(name: String, info: String) {
-        println("\n$name: $info")
+        terminal.println("\n$name: $info")
+    }
+
+    private fun error(name: String, info: String) {
+        info(name, red(info))
     }
 
     /**
@@ -481,20 +502,20 @@ class CertificateHelper : CliktCommand(
         val certs = if (cleanup) cleanup(certificates) else certificates
         for (cert in certs.withIndex()) {
             if (certIndex.isEmpty() || cert.index in certIndex) {
-                certificate(name, cert.value)
+                certificate(cert.value, name)
             }
         }
     }
 
-    private fun certificate(name: String, cert: X509Certificate) {
+    private fun certificate(cert: X509Certificate, name: String) {
         when (outputFormat) {
-            OutputFormat.SUMMARY -> certificateSummary(name, cert)
-            OutputFormat.TEXT -> certificateText(name, cert)
+            OutputFormat.SUMMARY -> certificateSummary(cert, name)
+            OutputFormat.TEXT -> certificateText(cert, name)
             OutputFormat.BASE64, OutputFormat.PEM, OutputFormat.CONFIG -> certificatePem(cert)
         }
     }
 
-    private fun certificateSummary(name: String, cert: X509Certificate) {
+    private fun certificateSummary(cert: X509Certificate, name: String? = null) {
         fun altName(altName: List<*>, type: Int) = (altName[1] as String).takeIf { altName[0] as Int == type }
 
         fun dns(altNames: List<*>) = altName(altNames, 2)
@@ -505,8 +526,6 @@ class CertificateHelper : CliktCommand(
             LdapName(name).rdns.find { it.type == "CN" }?.value ?: name
         }
 
-        fun fingerprint(data: ByteArray) =  data.sha256Hex()
-
         fun keyUsage(data: BooleanArray) =
             data.mapIndexed { idx, b -> if (b && idx in keyUsages.indices) keyUsages[idx] else null }
                 .filterNotNull().joinToString()
@@ -515,16 +534,29 @@ class CertificateHelper : CliktCommand(
 
         with(writer) {
             with(cert) {
-                val root = if (rootCertificates.containsKey(subjectX500Principal)) "trusted root " else ""
-                val selfSigned = if (subjectX500Principal == issuerX500Principal) "self-signed " else ""
-                println("\n$name: X509 v$version ${selfSigned}${root}certificate for ${cn(subjectX500Principal)}")
-                println("\tCertificate fingerprint: ${fingerprint(encoded)}")
-                println("\tPublic key fingerprint: ${fingerprint(publicKey.encoded)}")
-                val notBeforeInstant = notBefore.toInstant()
-                if (notBeforeInstant > Instant.now()) {
-                    println("\tNot Before: $notBeforeInstant")
+                val rootCA = rootCertificates[subjectX500Principal]
+                val fingerprint = encoded.fingerprint()
+                val root = when {
+                    rootCA == null -> ""
+                    rootCA.encoded.fingerprint() == fingerprint -> "${green("trusted")} root "
+                    else -> "${red("untrusted")} root "
                 }
-                println("\tExpires: ${notAfter.toInstant()}")
+                val selfSigned = if (subjectX500Principal == issuerX500Principal) "self-signed " else ""
+                val prefix = if (name.isNullOrEmpty()) "" else "$name: "
+                println("\n${prefix}X509 v$version ${selfSigned}${root}certificate for ${cn(subjectX500Principal)}")
+                println("\tCertificate fingerprint: $fingerprint")
+                println("\tPublic key fingerprint: ${publicKey.encoded.fingerprint()}")
+                val now = Instant.now()
+                val notBeforeInstant = notBefore.toInstant()
+                if (notBeforeInstant > now) {
+                    println("\tNot Before: ${yellow(notBeforeInstant.toString())}")
+                }
+                val notAfterInstant = notAfter.toInstant()
+                if (notAfterInstant < now) {
+                    println("\tExpires: ${yellow(notAfterInstant.toString())}")
+                } else {
+                    println("\tExpires: $notAfterInstant")
+                }
                 println("\tIssuer: ${cn(issuerX500Principal)}")
                 // All the remaining properties can be `null`
                 if (keyUsage.hasContent()) {
@@ -545,7 +577,7 @@ class CertificateHelper : CliktCommand(
         }
     }
 
-    private fun certificateText(name: String, cert: X509Certificate) {
+    private fun certificateText(cert: X509Certificate, name: String) {
         with(writer) {
             println(name)
             println(cert)
