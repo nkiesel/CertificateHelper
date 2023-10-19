@@ -1,0 +1,17 @@
+#!/bin/zsh
+
+if [[ -z $GRAALVM_HOME ]]; then
+  echo "Download GraalVM and set GRAALVM_HOME to point to its Home directory"
+  exit 1
+fi
+
+list=(build/libs/CertificateHelper-*-uber.jar)
+jar=${list[-1]}
+
+if [[ -z $jar ]]; then
+  echo 'First build the JAR file using `./gradlew uber`'
+  exit 1
+fi
+
+
+$GRAALVM_HOME/bin/native-image -H:IncludeResources='com/sun/jna/darwin-aarch64/libjnidispatch.jnilib' -jar $jar ch
