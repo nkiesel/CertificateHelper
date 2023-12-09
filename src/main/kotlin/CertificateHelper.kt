@@ -8,10 +8,7 @@ import com.github.ajalt.mordant.rendering.TextColors.*
 import com.github.ajalt.mordant.terminal.Terminal
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.*
 import org.http4k.client.OkHttp
 import org.http4k.client.PreCannedOkHttpClients
 import org.http4k.core.Method
@@ -65,25 +62,48 @@ enum class OutputFormat {
     SUMMARY, TEXT, PEM, BASE64, CONFIG
 }
 
-private val keyUsages = arrayOf(
-    "Digital signature",
-    "Non-repudiation",
-    "Key encipherment",
-    "Data encipherment",
-    "Key agreement",
-    "Certificate signing",
-    "CRL signing",
-    "Encipher only",
-    "Decipher only",
+// https://www.rfc-editor.org/rfc/rfc5280.html#section-4.2.1.3
+private val keyUsages = mapOf(
+    0 to "Digital signature",
+    1 to "content commitment",
+    2 to "Key encipherment",
+    3 to "Data encipherment",
+    4 to "Key agreement",
+    5 to "Certificate signing",
+    6 to "CRL signing",
+    7 to "Encipher only",
+    8 to "Decipher only",
 )
 
+private class EKP(val name: String, val description: String) {
+    fun toString(verbose: Boolean) = if (verbose) "$name: $description" else name
+}
+
+// https://www.rfc-editor.org/rfc/rfc5280.html#section-4.2.1.12
+// name and description from https://oid-rep.orange-labs.fr/get/1.3.6.1.5.5.7.3 and https://www.rfc-editor.org/errata/eid5802
 private val extendedKeyUsages = mapOf(
-    "1.3.6.1.5.5.7.3.1" to "Server authentication",
-    "1.3.6.1.5.5.7.3.2" to "Client authentication",
-    "1.3.6.1.5.5.7.3.3" to "Code signing",
-    "1.3.6.1.5.5.7.3.4" to "Email",
-    "1.3.6.1.5.5.7.3.8" to "Timestamping",
-    "1.3.6.1.5.5.7.3.9[a]" to "OCSP Signing",
+    "1.3.6.1.5.5.7.3.1" to EKP("serverAuth", "Transport Layer Security (TLS) server authentication"),
+    "1.3.6.1.5.5.7.3.2" to EKP("clientAuth", "Transport Layer Security (TLS) client authentication"),
+    "1.3.6.1.5.5.7.3.3" to EKP("codeSigning", "Signing of downloadable executable code"),
+    "1.3.6.1.5.5.7.3.4" to EKP("emailProtection", "E-mail protection"),
+    "1.3.6.1.5.5.7.3.5" to EKP("ipsecEndSystem", "Internet Protocol SECurity (IPSEC) end system certificate"),
+    "1.3.6.1.5.5.7.3.6" to EKP("ipsecTunnel", "Internet Protocol SECurity (IPSEC) tunnel certificate"),
+    "1.3.6.1.5.5.7.3.7" to EKP("ipsecUser", "Internet Protocol SECurity (IPSEC) user certificate"),
+    "1.3.6.1.5.5.7.3.8" to EKP("timeStamping", "Binding the hash of an object to a time"),
+    "1.3.6.1.5.5.7.3.9" to EKP("OCSPSigning", "Signing Online Certificate Status Protocol (OCSP) responses"),
+    "1.3.6.1.5.5.7.3.21" to EKP("secureShellClient", "Key can be used for a Secure Shell client"),
+    "1.3.6.1.5.5.7.3.22" to EKP("secureShellServer", "Key can be used for a Secure Shell server"),
+    "1.3.6.1.5.5.7.3.33" to EKP("rpcTLSClient", "id-kp-rpcTLSClient"),
+    "1.3.6.1.5.5.7.3.34" to EKP("rpcTLSServer", "id-kp-rpcTLSServer"),
+    "1.3.6.1.5.5.7.3.36" to EKP("documentSigning", "Extended key purpose for document signing in certificates"),
+    "1.3.6.1.5.5.7.3.37" to EKP("jwt", "id-kp-jwt"),
+    "1.3.6.1.5.5.7.3.38" to EKP("httpContentEncrypt", "id-kp-httpContentEncrypt"),
+    "1.3.6.1.5.5.7.3.39" to EKP("oauthAccessTokenSigning", "id-kp-oauthAccessTokenSigning"),
+    // https://access.redhat.com/documentation/en-us/red_hat_certificate_system/9/html/administration_guide/standard_x.509_v3_certificate_extensions#Discussion-PKIX_Extended_Key_Usage_Extension_Uses
+    "1.3.6.1.4.1.311.10.3.1" to EKP("CTLSigning", "Certificate trust list signing"),
+    "1.3.6.1.4.1.311.10.3.3" to EKP("SGC", "Microsoft Server Gated Crypto (SGC)"),
+    "1.3.6.1.4.1.311.10.3.4" to EKP("EFS", "Microsoft Encrypted File System"),
+    "2.16.840.1.113730.4.1" to EKP("export-approved", "Netscape Server Gated Crypto (SGC)"),
 )
 
 typealias X509List = List<X509Certificate>
@@ -112,7 +132,7 @@ class CertificateHelper : CliktCommand(
         completionOption()
         versionOption(
             javaClass.getResourceAsStream("version")?.bufferedReader()?.use { it.readLine() } ?: "development",
-            names = setOf("-v", "--version")
+            names = setOf("--version")
         )
     }
 
@@ -140,6 +160,7 @@ class CertificateHelper : CliktCommand(
     private val timeout by option(help = "Server connection timeout; 0s for no timeout")
         .convert { Duration.parse(it) }.default(5.seconds)
     private val rootCAs by option("--rootCAs", help = "list root CAs, filter with optional regex").optionalValue(".*")
+    private val verbose by option("-v", "--verbose", help = "more verbose output").flag()
 
     private val content = StringWriter()
     private val writer = PrintWriter(content)
@@ -335,8 +356,15 @@ class CertificateHelper : CliktCommand(
         }
 
         var json: JsonElement? = parser.parseToJsonElement(config)
+        val arrayRegex = Regex("""(.+)\[(\d+)]""")
         for (comp in configKey.split(".")) {
-            json = json?.jsonObject?.get(comp)
+            val array = arrayRegex.matchEntire(comp)
+            json = if (array !== null) {
+                val (name, index) = array.destructured
+                json?.jsonObject?.get(name)?.jsonArray?.get(index.toInt())
+            } else {
+                json?.jsonObject?.get(comp)
+            }
         }
         if (json == null) {
             error(input, "Cannot extract $configKey")
@@ -527,10 +555,11 @@ class CertificateHelper : CliktCommand(
         }
 
         fun keyUsage(data: BooleanArray) =
-            data.mapIndexed { idx, b -> if (b && idx in keyUsages.indices) keyUsages[idx] else null }
+            data.mapIndexed { idx, b -> if (b) keyUsages[idx] ?: "bit $idx set to true" else null }
                 .filterNotNull().joinToString()
 
-        fun extKeyUsage(data: List<String>) = data.joinToString { extendedKeyUsages[it] ?: "???" }
+        fun extKeyUsage(data: List<String>) =
+            data.joinToString { extendedKeyUsages[it]?.toString(verbose) ?: it }
 
         with(writer) {
             with(cert) {
