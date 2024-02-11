@@ -1,30 +1,29 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
 plugins {
-    kotlin("jvm") version "1.9.10"
-    kotlin("plugin.serialization") version "1.9.10"
+    kotlin("jvm") version "1.9.22"
+    kotlin("plugin.serialization") version "1.9.22"
     application
 }
 
 group = "nkiesel.org"
-version = "2.4.0"
+version = "2.5.1"
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    implementation("com.github.ajalt.clikt:clikt:4.2.0")
+    implementation("com.github.ajalt.clikt:clikt:4.2.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
-    implementation("org.http4k:http4k-core:5.10.5.0")
-    implementation("org.http4k:http4k-client-okhttp:5.10.5.0")
-    implementation("com.github.ajalt.mordant:mordant:2.1.0")
+    implementation("org.http4k:http4k-core:5.13.5.0")
+    implementation("org.http4k:http4k-client-okhttp:5.13.5.0")
+    implementation("com.github.ajalt.mordant:mordant:2.3.0")
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.1")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.1")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
     testImplementation("io.kotest:kotest-assertions-core:5.8.0")
 }
 
