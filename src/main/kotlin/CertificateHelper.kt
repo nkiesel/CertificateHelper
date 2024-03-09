@@ -18,6 +18,7 @@ import org.http4k.core.appendToPath
 import java.io.InputStream
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.security.KeyStore
@@ -326,7 +327,7 @@ class CertificateHelper : CliktCommand(
     }
 
     private fun handleServer(host: String) {
-        val addresses = InetAddress.getAllByName(host)
+        val addresses = InetAddress.getAllByName(host).filterIsInstance<Inet4Address>()
         val count = addresses.size
         if (outputFormat == OutputFormat.SUMMARY || outputFormat == OutputFormat.TEXT) {
             info(host, "Addresses: ${addresses.map { it.hostAddress }}")
