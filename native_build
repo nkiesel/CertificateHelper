@@ -14,4 +14,4 @@ if [[ -z $jar ]]; then
 fi
 
 
-$GRAALVM_HOME/bin/native-image -H:IncludeResources='com/sun/jna/darwin-aarch64/libjnidispatch.jnilib' -jar $jar ch
+$GRAALVM_HOME/bin/native-image -H:IncludeResources='com/sun/jna/darwin-aarch64/libjnidispatch.jnilib' -jar $jar --no-fallback ch
