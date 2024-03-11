@@ -3,13 +3,13 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
 plugins {
-    kotlin("jvm") version "1.9.22"
-    kotlin("plugin.serialization") version "1.9.22"
+    kotlin("jvm") version "1.9.23"
+    kotlin("plugin.serialization") version "1.9.23"
     application
 }
 
 group = "nkiesel.org"
-version = "2.5.2"
+version = "2.5.3"
 
 repositories {
     mavenCentral()
@@ -17,9 +17,9 @@ repositories {
 
 dependencies {
     implementation("com.github.ajalt.clikt:clikt:4.2.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
-    implementation("org.http4k:http4k-core:5.13.5.0")
-    implementation("org.http4k:http4k-client-okhttp:5.13.5.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("org.http4k:http4k-core:5.14.0.0")
+    implementation("org.http4k:http4k-client-okhttp:5.14.0.0")
     implementation("com.github.ajalt.mordant:mordant:2.3.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
