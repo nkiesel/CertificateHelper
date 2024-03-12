@@ -77,7 +77,7 @@ private val keyUsages = mapOf(
 )
 
 private class EKP(val name: String, val description: String) {
-    fun toString(verbose: Boolean) = if (verbose) "$name: $description" else name
+    fun toString(key: String, verbose: Boolean) = if (verbose) "$name: $description ($key)" else name
 }
 
 // https://www.rfc-editor.org/rfc/rfc5280.html#section-4.2.1.12
@@ -104,7 +104,11 @@ private val extendedKeyUsages = mapOf(
     "1.3.6.1.4.1.311.10.3.1" to EKP("CTLSigning", "Certificate trust list signing"),
     "1.3.6.1.4.1.311.10.3.3" to EKP("SGC", "Microsoft Server Gated Crypto (SGC)"),
     "1.3.6.1.4.1.311.10.3.4" to EKP("EFS", "Microsoft Encrypted File System"),
+    // https://www.pkisolutions.com/object-identifiers-oid-in-pki/
+    "1.3.6.1.4.1.311.10.3.12" to EKP("DocSigning", "Microsoft Document Signing"),
+    "1.3.6.1.4.1.311.20.2.2" to EKP("SmartCard", "Microsoft Smart Card Logon"),
     "2.16.840.1.113730.4.1" to EKP("export-approved", "Netscape Server Gated Crypto (SGC)"),
+    "1.2.840.113583.1.1.5" to EKP("AADT", "Adobe Authentic Documents Trust"),
 )
 
 typealias X509List = List<X509Certificate>
@@ -559,8 +563,15 @@ class CertificateHelper : CliktCommand(
             data.mapIndexed { idx, b -> if (b) keyUsages[idx] ?: "bit $idx set to true" else null }
                 .filterNotNull().joinToString()
 
-        fun extKeyUsage(data: List<String>) =
-            data.joinToString { extendedKeyUsages[it]?.toString(verbose) ?: it }
+        fun extKeyUsage(data: List<String>): String {
+            val transform: (String) -> String = { extendedKeyUsages[it]?.toString(it, verbose) ?: it }
+            return if (verbose) {
+                val separator = "\n\t\t"
+                data.joinToString(separator, prefix = separator, transform = transform)
+            } else {
+                data.joinToString(transform = transform)
+            }
+        }
 
         with(writer) {
             with(cert) {
