@@ -127,7 +127,7 @@ class CertificateHelper : CliktCommand(
     """.trimIndent(),
     epilog = """
     Vault operations need a current vault token. This can be provided either via
-    the environment variable VAULT_TOKEN, or via the file ${'$'}HOME/.vault-token.
+    the environment variable VAULT_TOKEN, or via the file `${'$'}HOME/.vault-token`.
     The latter is automatically created when using the command "vault login". The
     token (normally valid for 24 hours) can be generated after signing into the vault
     and then using the "Copy Token" menu entry from the top-right user menu.
