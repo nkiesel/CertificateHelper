@@ -17,14 +17,14 @@ repositories {
 
 dependencies {
     implementation("com.github.ajalt.clikt:clikt:4.3.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-    implementation("org.http4k:http4k-core:5.21.0.0")
-    implementation("org.http4k:http4k-client-okhttp:5.20.0.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.0")
+    implementation("org.http4k:http4k-core:5.22.0.0")
+    implementation("org.http4k:http4k-client-okhttp:5.22.0.0")
     implementation("com.github.ajalt.mordant:mordant:2.6.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
-    testImplementation("io.kotest:kotest-assertions-core:5.9.0")
+    testImplementation("io.kotest:kotest-assertions-core:5.9.1")
 }
 
 kotlin {
