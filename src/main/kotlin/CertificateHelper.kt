@@ -587,6 +587,7 @@ class CertificateHelper : CliktCommand(
                 println("\n${prefix}X509 v$version ${selfSigned}${root}certificate for ${cn(subjectX500Principal)}")
                 println("\tCertificate fingerprint: $fingerprint")
                 println("\tPublic key fingerprint: ${publicKey.encoded.fingerprint()}")
+                if (verbose) println("\tSerial number: $serialNumber")
                 val now = Instant.now()
                 val notBeforeInstant = notBefore.toInstant()
                 if (notBeforeInstant > now) {

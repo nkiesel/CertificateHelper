@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "nkiesel.org"
-version = "2.7.1"
+version = "2.7.2"
 
 repositories {
     mavenCentral()
@@ -18,8 +18,8 @@ repositories {
 dependencies {
     implementation("com.github.ajalt.clikt:clikt:4.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.0")
-    implementation("org.http4k:http4k-core:5.22.0.0")
-    implementation("org.http4k:http4k-client-okhttp:5.22.0.0")
+    implementation("org.http4k:http4k-core:5.23.0.0")
+    implementation("org.http4k:http4k-client-okhttp:5.23.0.0")
     implementation("com.github.ajalt.mordant:mordant:2.6.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
