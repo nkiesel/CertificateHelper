@@ -15,7 +15,15 @@ data class Api(
     val JWEPublicKeyBase64: Array<String>,
 //    val JWEPrivateKeyBase64: Array<JWEPrivateKeyBase64>,
 //    val timeoutInMs: Int
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        return this === other || other is Api && JWEPublicKeyBase64.contentEquals(other.JWEPublicKeyBase64)
+    }
+
+    override fun hashCode(): Int {
+        return JWEPublicKeyBase64.contentHashCode()
+    }
+}
 
 @Serializable
 data class JWEPrivateKeyBase64(

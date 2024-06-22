@@ -3,19 +3,19 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 
 fun setJsonValue(json: JsonObject, path: String, value: String): JsonObject {
-    return setJsonValueRec(json, path.split("."), JsonPrimitive(value))
+    return setJsonValue(json, path, JsonPrimitive(value))
 }
 
 fun setJsonValue(json: JsonObject, path: String, value: Int): JsonObject {
-    return setJsonValueRec(json, path.split("."), JsonPrimitive(value))
+    return setJsonValue(json, path, JsonPrimitive(value))
 }
 
-fun setJsonValue(json: JsonObject, path: String, value: Boolean): JsonObject {
-    return setJsonValueRec(json, path.split("."), JsonPrimitive(value))
+private fun setJsonValue(obj: JsonObject, path: String, value: JsonPrimitive): JsonObject {
+    return setJsonValueRec(obj, path.split("."), value)
 }
 
-private fun setJsonValueRec(obj: JsonObject, path: List<String>, value: JsonPrimitive): JsonObject {
-    return JsonObject(obj.toMutableMap().apply {
+private fun setJsonValueRec(obj: JsonObject, path: List<String>, value: JsonPrimitive): JsonObject =
+    JsonObject(obj.toMutableMap().apply {
         val key = path.first()
         put(
             key,
@@ -27,4 +27,3 @@ private fun setJsonValueRec(obj: JsonObject, path: List<String>, value: JsonPrim
         )
     }
     )
-}

@@ -1,6 +1,8 @@
 import com.github.ajalt.clikt.completion.CompletionCandidates
 import com.github.ajalt.clikt.completion.completionOption
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.arguments.default
 import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.int
@@ -141,10 +143,10 @@ class CertificateHelper : CliktCommand(
         )
     }
 
-    private val input by option(
+    private val inputOption by option(
         "-i", "--input", completionCandidates = CompletionCandidates.Path,
         help = "Input file or server name; - for stdin"
-    ).default("-")
+    )
     private val inputFormat by option("-f", "--inputFormat", help = "Input format").enum<InputFormat>()
         .default(InputFormat.CONFIG)
     private val hostName by option("-n", "--hostName", help = "CA bundle using partner server name from config").flag()
@@ -166,6 +168,8 @@ class CertificateHelper : CliktCommand(
         .convert { Duration.parse(it) }.default(5.seconds)
     private val rootCAs by option("--rootCAs", help = "list root CAs, filter with optional regex").optionalValue(".*")
     private val verbose by option("-v", "--verbose", help = "more verbose output").flag()
+    private val argument by argument().default("")
+    private lateinit var input: String
 
     private val content = StringWriter()
     private val writer = PrintWriter(content)
@@ -196,6 +200,12 @@ class CertificateHelper : CliktCommand(
             writer.flush()
             print(content.toString())
             exitProcess(0)
+        }
+
+        input = when {
+            !inputOption.isNullOrBlank() -> inputOption!!
+            argument.isNotBlank() -> argument
+            else -> "-"
         }
 
         when (inputFormat) {
