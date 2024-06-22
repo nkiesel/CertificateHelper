@@ -65,6 +65,8 @@ enum class OutputFormat {
     SUMMARY, TEXT, PEM, BASE64, CONFIG
 }
 
+private const val terminalIO = "-"
+
 // https://www.rfc-editor.org/rfc/rfc5280.html#section-4.2.1.3
 private val keyUsages = mapOf(
     0 to "Digital signature",
@@ -122,9 +124,10 @@ fun main(args: Array<String>) {
 class CertificateHelper : CliktCommand(
     name = "ch",
     help = """
-        Reads or updates certificates from server, config, file, or vault.  Example:
+        Reads or updates certificates from server, config, file, or vault.  Examples:
         ```
-        ch -f server -i api.github.com
+        ch -f server api.github.com
+        ch -f pem my_cert.pem
         ```
     """.trimIndent(),
     epilog = """
@@ -146,7 +149,7 @@ class CertificateHelper : CliktCommand(
     private val inputOption by option(
         "-i", "--input", completionCandidates = CompletionCandidates.Path,
         help = "Input file or server name; - for stdin"
-    )
+    ).default("-")
     private val inputFormat by option("-f", "--inputFormat", help = "Input format").enum<InputFormat>()
         .default(InputFormat.CONFIG)
     private val hostName by option("-n", "--hostName", help = "CA bundle using partner server name from config").flag()
@@ -159,7 +162,7 @@ class CertificateHelper : CliktCommand(
     private val output by option(
         "-o", "--output", completionCandidates = CompletionCandidates.Path,
         help = "Output file name; - for stdout"
-    ).default("-")
+    ).default(terminalIO)
     private val outputFormat by option("-t", "--outputFormat", help = "Output format").enum<OutputFormat>()
         .default(OutputFormat.SUMMARY)
     private val certIndex: List<Int> by option("-c", "--certIndex", help = "Certificate indices (comma-separated)")
@@ -168,8 +171,9 @@ class CertificateHelper : CliktCommand(
         .convert { Duration.parse(it) }.default(5.seconds)
     private val rootCAs by option("--rootCAs", help = "list root CAs, filter with optional regex").optionalValue(".*")
     private val verbose by option("-v", "--verbose", help = "more verbose output").flag()
-    private val argument by argument().default("")
+    private val inputArgument by argument("input", help = "Input file or server name; - for stdin").default("")
     private lateinit var input: String
+    private var useStdin: Boolean = true
 
     private val content = StringWriter()
     private val writer = PrintWriter(content)
@@ -202,11 +206,8 @@ class CertificateHelper : CliktCommand(
             exitProcess(0)
         }
 
-        input = when {
-            !inputOption.isNullOrBlank() -> inputOption!!
-            argument.isNotBlank() -> argument
-            else -> "-"
-        }
+        input = inputArgument.ifBlank { inputOption }
+        useStdin = input == terminalIO
 
         when (inputFormat) {
             InputFormat.PEM, InputFormat.BASE64 -> handlePEM()
@@ -224,7 +225,7 @@ class CertificateHelper : CliktCommand(
             }
         }
         when {
-            output == "-" -> terminal.print(final)
+            output == terminalIO -> terminal.print(final)
             outputFormat == OutputFormat.CONFIG -> updateConfig(final)
             else -> Path(output).writeText(final)
         }
@@ -248,11 +249,11 @@ class CertificateHelper : CliktCommand(
     }
 
     private fun handlePEM() {
-        if (input == "-") {
-            val stdin = readText()
+        if (useStdin) {
+            val text = readText()
             val inputStream = when (inputFormat) {
-                InputFormat.BASE64 -> stdin.base64Decode().inputStream()
-                else -> stdin.byteInputStream()
+                InputFormat.BASE64 -> text.base64Decode().inputStream()
+                else -> text.byteInputStream()
             }
             chain(input, inputStream)
         } else {
@@ -270,7 +271,7 @@ class CertificateHelper : CliktCommand(
     }
 
     private fun handleServer() {
-        handleServer(if (input == "-") readln() else input)
+        handleServer(if (useStdin) readln() else input)
     }
 
     private fun getChain(host: String, address: InetAddress): X509List {
@@ -324,12 +325,12 @@ class CertificateHelper : CliktCommand(
             return emptyList()
         }
 
-        if (certIndex.isEmpty() || chain.size in certIndex) {
+        if (considerCertificate(chain.size)) {
             do {
                 val last = chain.last()
                 val issuer = last.issuerX500Principal
-                // Try to add the root certificate unless the current root is already self-signed
                 val rootCertificate = rootCertificates[issuer]
+                // Add the root certificate unless the current root is already self-signed
                 if (rootCertificate == null || issuer == last.subjectX500Principal) {
                     break
                 }
@@ -339,6 +340,8 @@ class CertificateHelper : CliktCommand(
 
         return chain
     }
+
+    private fun considerCertificate(idx: Int) = certIndex.isEmpty() || idx in certIndex
 
     private fun handleServer(host: String) {
         val addresses = InetAddress.getAllByName(host).filterIsInstance<Inet4Address>()
@@ -363,13 +366,13 @@ class CertificateHelper : CliktCommand(
     private fun getConfigKey() = key.takeUnless { it.isNullOrBlank() }
 
     private fun handleJson() {
-        val config = if (input == "-") readText() else Path(input).readText()
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
             error(input, "Key is required for config files")
             return
         }
 
+        val config = if (useStdin) readText() else Path(input).readText()
         var json: JsonElement? = parser.parseToJsonElement(config)
         val arrayRegex = Regex("""(.+)\[(\d+)]""")
         for (comp in configKey.split(".")) {
@@ -394,7 +397,7 @@ class CertificateHelper : CliktCommand(
     }
 
     private fun handleConfig() {
-        val config = if (input == "-") readText() else Path(input).readText()
+        val config = if (useStdin) readText() else Path(input).readText()
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
             error(input, "Key is required for config files")
@@ -430,7 +433,7 @@ class CertificateHelper : CliktCommand(
 
     private fun getVaultHost(): String {
         return when {
-            input != "-" -> input
+            !useStdin -> input
             else -> getEnv("VAULT_ADDR") ?: ""
         }
     }
@@ -544,7 +547,7 @@ class CertificateHelper : CliktCommand(
     private fun process(name: String, certificates: X509List) {
         val certs = if (cleanup) cleanup(certificates) else certificates
         for (cert in certs.withIndex()) {
-            if (certIndex.isEmpty() || cert.index in certIndex) {
+            if (considerCertificate(cert.index)) {
                 certificate(cert.value, name)
             }
         }
