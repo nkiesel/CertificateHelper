@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "nkiesel.org"
-version = "2.7.3"
+version = "2.8.1"
 
 repositories {
     mavenCentral()
