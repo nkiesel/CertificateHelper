@@ -14,4 +14,10 @@ if [[ -z $jar ]]; then
 fi
 
 
-$GRAALVM_HOME/bin/native-image -H:IncludeResources='com/sun/jna/darwin-aarch64/libjnidispatch.jnilib' -jar $jar --no-fallback ch
+$GRAALVM_HOME/bin/native-image \
+  --strict-image-heap \
+  --no-fallback \
+  --initialize-at-build-time=com.github.ajalt.mordant.internal.nativeimage.NativeImagePosixMppImpls \
+  -H:+UnlockExperimentalVMOptions \
+  -H:IncludeResources='com/sun/jna/darwin-aarch64/libjnidispatch.jnilib' \
+   -jar $jar ch
