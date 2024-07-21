@@ -1,25 +1,44 @@
 import io.kotest.matchers.shouldBe
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import org.intellij.lang.annotations.Language
 import org.junit.jupiter.api.Test
 
 class EACTest {
-    private val json = """
+    private val json = Json { ignoreUnknownKeys = true }
+
+    @Language("JSON")
+    private val abc = """
    {
-    "api": {
-      "JWEPublicKeyBase64": ["abcde"],
-      "timeoutInMs": 60000
-    },
     "tls": {
       "hostName": "api.example.com",
-      "caBundleBase64": "abcde"
+      "ckTLSCertificates": {
+      "current": {
+         "_source": "vault",
+      "_key": "abc-tls-ck-certificate-current"
+      },
+      "next": {
+      "_source": "vault",
+      "_key": "abc-tls-ck-certificate-next"
+      } 
+      },
+      "ckTLSPrivateKeys": {
+      "current": {
+         "_source": "vault",
+      "_key": "abc-tls-ck-privatekey-current"
+      },
+      "next": {
+      "_source": "vault",
+      "_key": "abc-tls-ck-privatekey-next"
+      } 
+      }
     }
   }
     """.trimIndent()
 
     @Test
     fun `parse Json`() {
-        val eac = Json { ignoreUnknownKeys = true }.decodeFromString<EAC>(json)
+        val eac = json.decodeFromString<EAC>(abc)
         eac.tls.hostName shouldBe "api.example.com"
+        eac.tls.ckTLSCertificates.current.key shouldBe "abc-tls-ck-certificate-current"
     }
 }

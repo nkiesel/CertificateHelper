@@ -8,6 +8,8 @@ import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.mordant.rendering.TextColors.*
 import com.github.ajalt.mordant.terminal.Terminal
+import com.google.cloud.secretmanager.v1.ProjectName
+import com.google.cloud.secretmanager.v1.SecretManagerServiceClient
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
@@ -62,7 +64,7 @@ enum class InputFormat {
 }
 
 enum class OutputFormat {
-    SUMMARY, TEXT, PEM, BASE64, CONFIG
+    SUMMARY, TEXT, PEM, BASE64
 }
 
 private const val terminalIO = "-"
@@ -157,7 +159,6 @@ class CertificateHelper : CliktCommand(
     private val tls by option("--tls", help = "own TLS info from config").flag()
     private val bundle by option("-b", "--bundle", help = "partner CA bundle info from config").flag(default = true)
     private val key by option("-k", "--key", help = "partner config key")
-    private val cleanup by option("--cleanup", help = "Clean up certificates (remove duplicates, drop expired)").flag()
     private val port by option("-p", "--port", help = "partner server port").int().default(443)
     private val output by option(
         "-o", "--output", completionCandidates = CompletionCandidates.Path,
@@ -220,31 +221,13 @@ class CertificateHelper : CliktCommand(
 
         val final = content.toString().let {
             when (outputFormat) {
-                OutputFormat.BASE64, OutputFormat.CONFIG -> it.base64Encode()
+                OutputFormat.BASE64 -> it.base64Encode()
                 else -> it
             }
         }
         when {
             output == terminalIO -> terminal.print(final)
-            outputFormat == OutputFormat.CONFIG -> updateConfig(final)
             else -> Path(output).writeText(final)
-        }
-    }
-
-    private fun updateConfig(content: String) {
-        val config = Path(output).readText()
-        val configKey = getConfigKey()
-        if (configKey.isNullOrBlank()) {
-            info(input, "Key is required for config files")
-            return
-        }
-        try {
-            val json = parser.parseToJsonElement(config).jsonObject
-            val updated = setJsonValue(json, "$configKey.tls.caBundleBase64", content)
-            Path(output).writeText(parser.encodeToString(updated))
-        } catch (e: Exception) {
-            info(output, "Cannot parse as JSON")
-            return
         }
     }
 
@@ -299,7 +282,6 @@ class CertificateHelper : CliktCommand(
             }
         } catch (e: Exception) {
             error(host, "Could not connect to $address within $timeout")
-            return emptyList()
         }
 
         val socketFactory = tlsContext.apply {
@@ -310,7 +292,6 @@ class CertificateHelper : CliktCommand(
             socketFactory.createSocket(address, port) as SSLSocket
         } catch (e: Exception) {
             error(host, "Could not connect to $address")
-            return emptyList()
         }
         sslSocket.use {
             try {
@@ -319,11 +300,7 @@ class CertificateHelper : CliktCommand(
             }
         }
 
-        val chain = tm.chain?.toMutableList()
-        if (chain == null) {
-            error(host, "Could not obtain server certificate chain for $address")
-            return emptyList()
-        }
+        val chain = tm.chain?.toMutableList() ?: error(host, "Could not obtain server certificate chain for $address")
 
         if (considerCertificate(chain.size)) {
             do {
@@ -369,7 +346,6 @@ class CertificateHelper : CliktCommand(
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
             error(input, "Key is required for config files")
-            return
         }
 
         val config = if (useStdin) readText() else Path(input).readText()
@@ -386,7 +362,6 @@ class CertificateHelper : CliktCommand(
         }
         if (json == null) {
             error(input, "Cannot extract $configKey")
-            return
         }
 
         if (hostName) {
@@ -397,26 +372,59 @@ class CertificateHelper : CliktCommand(
     }
 
     private fun handleConfig() {
-        val config = if (useStdin) readText() else Path(input).readText()
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
             error(input, "Key is required for config files")
-            return
         }
 
-        val json = parser.parseToJsonElement(config).jsonObject[configKey]
-        if (json == null) {
-            error(input, "Cannot extract $configKey")
-            return
+        class Config(config: String) {
+            val jsonElement = parser.parseToJsonElement(config)
+
+            inline fun <reified T> extract(name: String): T {
+                try {
+                    return parser.decodeFromString<T>(parser.encodeToString(jsonElement.jsonObject[name]))
+                } catch (e: Exception) {
+                    error(input, "Cannot extract $name")
+                }
+            }
         }
 
-        val partner = parser.decodeFromString<EAC>(parser.encodeToString(json))
+        val config = Config(if (useStdin) readText() else Path(input).readText())
+        val gcpSecretManager = config.extract<GCPSecretManager>("gcp-secret-manager")
+        val projectName = ProjectName.of(gcpSecretManager.project)
+        val partner = config.extract<EAC>(configKey)
 
         when {
             hostName -> handleServer(partner.tls.hostName)
-            jwe -> partner.api?.JWEPublicKeyBase64?.forEach { chain(input, it.base64Decode().inputStream()) }
-            tls -> partner.tls.clientCertificateBase64?.let { chain(input, it.base64Decode().inputStream()) }
+            jwe -> secrets(projectName, partner.api?.partnerJWECertificates)?.forEach { (name, value) ->
+                chain(
+                    "$name from $input",
+                    value.base64Decode().inputStream()
+                )
+            }
+            tls -> secrets(projectName, partner.tls.ckTLSCertificates)?.forEach { (name, value) ->
+                chain(
+                    "$name of $input",
+                    value.base64Decode().inputStream()
+                )
+            }
             bundle -> chain(input, partner.tls.caBundleBase64?.base64Decode()?.inputStream())
+        }
+    }
+
+    private fun secrets(projectName: ProjectName, partnerRelatedSecret: PartnerRelatedSecret?): Map<String, String>? {
+        if (partnerRelatedSecret == null) {
+            return null
+        }
+        SecretManagerServiceClient.create().use { client ->
+            fun value(secret: GSMReference) = client.accessSecretVersion(secret.latest(projectName)).payload.data.toString(Charsets.US_ASCII)
+            val current = value(partnerRelatedSecret.current)
+            val next = value(partnerRelatedSecret.next)
+            if (current == next) {
+                return mapOf("current and next" to current)
+            } else {
+                return mapOf("current" to current, "next" to next)
+            }
         }
     }
 
@@ -484,7 +492,6 @@ class CertificateHelper : CliktCommand(
     private fun chain(name: String, inputStream: InputStream?) {
         if (inputStream == null) {
             error(name, "No data")
-            return
         }
         inputStream.use { stream ->
             try {
@@ -501,52 +508,13 @@ class CertificateHelper : CliktCommand(
         terminal.println("\n$name: $info")
     }
 
-    private fun error(name: String, info: String) {
+    private fun error(name: String, info: String): Nothing {
         info(name, red(info))
-    }
-
-    /**
-     * This removes duplicates and expired certificates from the list. It also sorts the certificates
-     * so that issuers of a certificate - if they are part of the list - come after the certificate.
-     */
-    private fun cleanup(list: X509List): X509List {
-        /**
-         *  Split the [candidates] into 2 lists: those who have an issuer in the [parents] list, and the rest
-         */
-        fun findChildren(parents: X509List, candidates: X509List): Pair<X509List, X509List> {
-            val parentIds = parents.map { it.subjectX500Principal }
-            return candidates.partition { it.issuerX500Principal in parentIds }
-        }
-
-        // Filter and sort and split into root certs and the rest
-        val now = Instant.now()
-        var (issuers, candidates) = list
-            .filter { it.notAfter.toInstant() >= now }
-            .distinctBy { it.subjectX500Principal }
-            .sortedBy { cert -> cert.notAfter }
-            .partition { it.subjectX500Principal == it.issuerX500Principal }
-
-        // Add immediate children of issuers to issuers
-        while (candidates.isNotEmpty()) {
-            findChildren(issuers, candidates).let { (children, remaining) ->
-                if (children.isEmpty()) {
-                    // could not find any cert in candidates issued by issuer
-                    issuers += remaining
-                    candidates = emptyList()
-                } else {
-                    issuers += children
-                    candidates = remaining
-                }
-            }
-        }
-
-        // We want the leaf certs first, so reversing the list
-        return issuers.reversed()
+        exitProcess(1)
     }
 
     private fun process(name: String, certificates: X509List) {
-        val certs = if (cleanup) cleanup(certificates) else certificates
-        for (cert in certs.withIndex()) {
+        for (cert in certificates.withIndex()) {
             if (considerCertificate(cert.index)) {
                 certificate(cert.value, name)
             }
@@ -557,7 +525,7 @@ class CertificateHelper : CliktCommand(
         when (outputFormat) {
             OutputFormat.SUMMARY -> certificateSummary(cert, name)
             OutputFormat.TEXT -> certificateText(cert, name)
-            OutputFormat.BASE64, OutputFormat.PEM, OutputFormat.CONFIG -> certificatePem(cert)
+            OutputFormat.BASE64, OutputFormat.PEM -> certificatePem(cert)
         }
     }
 
