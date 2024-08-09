@@ -1,51 +1,58 @@
+import com.google.cloud.secretmanager.v1.ProjectName
+import com.google.cloud.secretmanager.v1.SecretVersionName
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
 data class EAC(
-    val api: Api? = null,
-//    val continueUrl: String,
-//    val secondsBetweenHealthchecks: Int,
-//    val statusPageUrlTemplate: String,
-//    val tilaUrl: String,
-    val tls: Tls
+    val oauth: OAuth? = null,
+    val tls: Tls,
+    val api: Api? = null
+)
+
+@Serializable
+data class GCPSecretManager(
+    val enabled: Boolean,
+    val project: String
+)
+
+@Serializable
+data class GSMReference(
+    @SerialName("_source") val source: String,
+    @SerialName("_key") val key: String,
+    ) {
+    fun latest(project: ProjectName): SecretVersionName = SecretVersionName.of(project.project, source, "latest")
+}
+
+@Serializable
+data class PartnerRelatedSecret(
+    val current: GSMReference,
+    val next: GSMReference,
 )
 
 @Serializable
 data class Api(
-    val JWEPublicKeyBase64: Array<String>,
-//    val JWEPrivateKeyBase64: Array<JWEPrivateKeyBase64>,
-//    val timeoutInMs: Int
-) {
-    override fun equals(other: Any?): Boolean {
-        return this === other || other is Api && JWEPublicKeyBase64.contentEquals(other.JWEPublicKeyBase64)
-    }
-
-    override fun hashCode(): Int {
-        return JWEPublicKeyBase64.contentHashCode()
-    }
-}
-
-@Serializable
-data class JWEPrivateKeyBase64(
-    val _source: String,
-    val _key: String
+    val partnerJWECertificates: PartnerRelatedSecret,
+    val ckJWEPrivateKeys: PartnerRelatedSecret,
 )
 
 @Serializable
 data class Tls(
     val hostName: String,
-//    val hostHeader: String,
-//    val path: String,
-//    val healthCheckPath: String,
-//    val ciphers: String,
     val overrideBundle: Boolean = false,
     val caBundleBase64: String? = null,
     val clientCertificateBase64: String? = null,
-//    val clientPrivateKeyBase64: ClientPrivateKeyBase64
+    val ckTLSCertificates: PartnerRelatedSecret,
+    val ckTLSPrivateKeys: PartnerRelatedSecret,
 )
 
-//@Serializable
-//data class ClientPrivateKeyBase64(
-//    val _source: String,
-//    val _key: String
-//)
+@Serializable
+data class OAuthClientConfig(
+    @SerialName("client_id") val clientId: GSMReference,
+    @SerialName("client_secrets") val clientSecrets: PartnerRelatedSecret,
+)
+
+@Serializable
+data class OAuth(
+    @SerialName("client_config") val clientConfig: OAuthClientConfig
+)
