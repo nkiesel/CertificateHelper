@@ -3,8 +3,8 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
 plugins {
-    kotlin("jvm") version "2.0.10"
-    kotlin("plugin.serialization") version "2.0.10"
+    kotlin("jvm") version "2.0.21"
+    kotlin("plugin.serialization") version "2.0.21"
     application
 }
 
@@ -16,15 +16,16 @@ repositories {
 }
 
 dependencies {
-    implementation("com.github.ajalt.clikt:clikt:4.3.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
-    implementation("org.http4k:http4k-core:5.26.1.0")
-    implementation("org.http4k:http4k-client-okhttp:5.26.1.0")
-    implementation("com.github.ajalt.mordant:mordant:2.7.0")
-    implementation("com.google.cloud:google-cloud-secretmanager:2.46.0")
+    implementation("com.github.ajalt.clikt:clikt:5.0.1")
+    implementation("com.github.ajalt.clikt:clikt-markdown:5.0.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation("org.http4k:http4k-core:5.32.4.0")
+    implementation("org.http4k:http4k-client-okhttp:5.32.4.0")
+    implementation("com.github.ajalt.mordant:mordant:3.0.0")
+    implementation("com.google.cloud:google-cloud-secretmanager:2.52.0")
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.11.3")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.3")
     testImplementation("io.kotest:kotest-assertions-core:5.9.1")
 }
 

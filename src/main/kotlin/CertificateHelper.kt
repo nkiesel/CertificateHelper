@@ -1,6 +1,9 @@
 import com.github.ajalt.clikt.completion.CompletionCandidates
 import com.github.ajalt.clikt.completion.completionOption
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.Context
+import com.github.ajalt.clikt.core.installMordantMarkdown
+import com.github.ajalt.clikt.core.main
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.default
 import com.github.ajalt.clikt.parameters.options.*
@@ -120,26 +123,13 @@ private val extendedKeyUsages = mapOf(
 typealias X509List = List<X509Certificate>
 
 fun main(args: Array<String>) {
-    CertificateHelper().main(args)
+    CertificateHelper().run {
+        installMordantMarkdown()
+        main(args)
+    }
 }
 
-class CertificateHelper : CliktCommand(
-    name = "ch",
-    help = """
-        Reads or updates certificates from server, config, file, or vault.  Examples:
-        ```
-        ch -f server api.github.com
-        ch -f pem my_cert.pem
-        ```
-    """.trimIndent(),
-    epilog = """
-    Vault operations need a current vault token. This can be provided either via
-    the environment variable VAULT_TOKEN, or via the file `${'$'}HOME/.vault-token`.
-    The latter is automatically created when using the command "vault login". The
-    token (normally valid for 24 hours) can be generated after signing into the vault
-    and then using the "Copy Token" menu entry from the top-right user menu.
-    """.trimIndent(),
-) {
+class CertificateHelper : CliktCommand(name = "ch") {
     init {
         completionOption()
         versionOption(
@@ -147,6 +137,22 @@ class CertificateHelper : CliktCommand(
             names = setOf("--version")
         )
     }
+
+    override fun help(context: Context): String = """
+    Reads or updates certificates from server, config, file, or vault.  Examples:
+    ```
+    ch -f server api.github.com
+    ch -f pem my_cert.pem
+    ```
+    """.trimIndent()
+
+    override fun helpEpilog(context: Context): String = """
+    Vault operations need a current vault token. This can be provided either via
+    the environment variable VAULT_TOKEN, or via the file `${'$'}HOME/.vault-token`.
+    The latter is automatically created when using the command "vault login". The
+    token (normally valid for 24 hours) can be generated after signing into the vault
+    and then using the "Copy Token" menu entry from the top-right user menu.
+    """.trimIndent()
 
     private val inputOption by option(
         "-i", "--input", completionCandidates = CompletionCandidates.Path,
@@ -280,7 +286,7 @@ class CertificateHelper : CliktCommand(
             SSLSocketFactory.getDefault().createSocket().use {
                 it.connect(InetSocketAddress(address, port), timeout.inWholeMilliseconds.toInt())
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             error(host, "Could not connect to $address within $timeout")
         }
 
@@ -290,7 +296,7 @@ class CertificateHelper : CliktCommand(
 
         val sslSocket = try {
             socketFactory.createSocket(address, port) as SSLSocket
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             error(host, "Could not connect to $address")
         }
         sslSocket.use {
@@ -383,7 +389,7 @@ class CertificateHelper : CliktCommand(
             inline fun <reified T> extract(name: String): T {
                 try {
                     return parser.decodeFromString<T>(parser.encodeToString(jsonElement.jsonObject[name]))
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     error(input, "Cannot extract $name")
                 }
             }
@@ -489,7 +495,7 @@ class CertificateHelper : CliktCommand(
         inputStream.use { stream ->
             try {
                 process(name, certificateFactory.generateCertificates(stream).map { it as X509Certificate })
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 error(name, "Could not read as X509 certificate")
             }
         }
