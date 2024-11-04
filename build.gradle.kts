@@ -56,7 +56,9 @@ tasks.register<Jar>("uberJar") {
     dependsOn(configurations.runtimeClasspath)
     from({
         configurations.runtimeClasspath.get().filter { it.name.endsWith(".jar") }.map { zipTree(it) }
-    })
+    }) {
+        exclude("META-INF/*.RSA", "META-INF/*.SF", "META-INF/*.DSA")
+    }
 }
 
 val versionFile: Path = layout.buildDirectory.file("generated/version").get().asFile.toPath()
