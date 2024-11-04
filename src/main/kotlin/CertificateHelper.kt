@@ -416,15 +416,19 @@ class CertificateHelper : CliktCommand(
         if (partnerRelatedSecret == null) {
             return null
         }
-        SecretManagerServiceClient.create().use { client ->
-            fun value(secret: GSMReference) = client.accessSecretVersion(secret.latest(projectName)).payload.data.toString(Charsets.US_ASCII)
-            val current = value(partnerRelatedSecret.current)
-            val next = value(partnerRelatedSecret.next)
-            if (current == next) {
-                return mapOf("current and next" to current)
-            } else {
-                return mapOf("current" to current, "next" to next)
+        try {
+            SecretManagerServiceClient.create().use { client ->
+                fun value(secret: GSMReference) = client.accessSecretVersion(secret.latest(projectName)).payload.data.toString(Charsets.US_ASCII)
+                val current = value(partnerRelatedSecret.current)
+                val next = value(partnerRelatedSecret.next)
+                if (current == next) {
+                    return mapOf("current and next" to current)
+                } else {
+                    return mapOf("current" to current, "next" to next)
+                }
             }
+        } catch (e: Exception) {
+            error(input, "Could not read secrets from ${projectName.project}: ${e.message?.split("\n")?.get(0)}")
         }
     }
 
