@@ -21,7 +21,7 @@ data class GSMReference(
     @SerialName("_source") val source: String,
     @SerialName("_key") val key: String,
     ) {
-    fun latest(project: ProjectName): SecretVersionName = SecretVersionName.of(project.project, source, "latest")
+    fun latest(project: ProjectName): SecretVersionName = SecretVersionName.of(project.project, key, "latest")
 }
 
 @Serializable

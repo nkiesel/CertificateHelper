@@ -63,7 +63,7 @@ fun String?.hasContent() = !this.isNullOrEmpty()
 fun BooleanArray?.hasContent() = this != null && this.isNotEmpty()
 
 enum class InputFormat {
-    SERVER, JSON, PEM, BASE64, VAULT, CONFIG
+    SERVER, JSON, PEM, BASE64, CONFIG, SECRET,
 }
 
 enum class OutputFormat {
@@ -139,7 +139,7 @@ class CertificateHelper : CliktCommand(name = "ch") {
     }
 
     override fun help(context: Context): String = """
-    Reads or updates certificates from server, config, file, or vault.  Examples:
+    Reads or updates certificates from server, config, file, or secret.  Examples:
     ```
     ch -f server api.github.com
     ch -f pem my_cert.pem
@@ -147,11 +147,8 @@ class CertificateHelper : CliktCommand(name = "ch") {
     """.trimIndent()
 
     override fun helpEpilog(context: Context): String = """
-    Vault operations need a current vault token. This can be provided either via
-    the environment variable VAULT_TOKEN, or via the file `${'$'}HOME/.vault-token`.
-    The latter is automatically created when using the command "vault login". The
-    token (normally valid for 24 hours) can be generated after signing into the vault
-    and then using the "Copy Token" menu entry from the top-right user menu.
+    GSM operations need an access token. Run `gcloud auth application-default login`
+    to allow `ch` access to GSM.
     """.trimIndent()
 
     private val inputOption by option(
@@ -163,8 +160,9 @@ class CertificateHelper : CliktCommand(name = "ch") {
     private val hostName by option("-n", "--hostName", help = "CA bundle using partner server name from config").flag()
     private val jwe by option("-j", "--jwe", help = "partner JWE info from config").flag()
     private val tls by option("--tls", help = "own TLS info from config").flag()
-    private val bundle by option("-b", "--bundle", help = "partner CA bundle info from config").flag(default = true)
+    private val bundle by option("-b", "--bundle", help = "partner CA bundle info from config").flag(default = false)
     private val key by option("-k", "--key", help = "partner config key")
+    private val secretName by option("-s", "--secretName", help = "partner-related secret name").default("")
     private val port by option("-p", "--port", help = "partner server port").int().default(443)
     private val output by option(
         "-o", "--output", completionCandidates = CompletionCandidates.Path,
@@ -216,12 +214,12 @@ class CertificateHelper : CliktCommand(name = "ch") {
         input = inputArgument.ifBlank { inputOption }
         useStdin = input == terminalIO
 
-        when (inputFormat) {
+        when (if (secretName.isNotBlank()) InputFormat.SECRET else inputFormat) {
             InputFormat.PEM, InputFormat.BASE64 -> handlePEM()
             InputFormat.SERVER -> handleServer()
             InputFormat.JSON -> handleJson()
             InputFormat.CONFIG -> handleConfig()
-            InputFormat.VAULT -> handleVault()
+            InputFormat.SECRET -> handleSecret()
         }
         writer.flush()
 
@@ -377,114 +375,87 @@ class CertificateHelper : CliktCommand(name = "ch") {
         }
     }
 
+    private inner class Config(config: String) {
+        val jsonElement = parser.parseToJsonElement(config)
+
+        inline fun <reified T> extract(name: String): T {
+            try {
+                return parser.decodeFromString<T>(parser.encodeToString(jsonElement.jsonObject[name]))
+            } catch (_: Exception) {
+                error(input, "Cannot extract $name")
+            }
+        }
+    }
+
     private fun handleConfig() {
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
             error(input, "Key is required for config files")
         }
-
-        class Config(config: String) {
-            val jsonElement = parser.parseToJsonElement(config)
-
-            inline fun <reified T> extract(name: String): T {
-                try {
-                    return parser.decodeFromString<T>(parser.encodeToString(jsonElement.jsonObject[name]))
-                } catch (_: Exception) {
-                    error(input, "Cannot extract $name")
-                }
+        val config = Config(if (useStdin) readText() else Path(input).readText())
+        val gcpSecretManager = config.extract<GCPSecretManager>("gcp-secret-manager")
+        val projectName = ProjectName.of(gcpSecretManager.project)
+        val partner = config.extract<EAC>(configKey)
+        when {
+            hostName -> handleServer(partner.tls.hostName)
+            jwe || tls -> secrets(
+                projectName,
+                if (jwe) partner.api?.partnerJWECertificates else partner.tls.ckTLSCertificates
+            )?.forEach { (name, value) ->
+                chain(
+                    "$name from $projectName",
+                    value.base64Decode().inputStream()
+                )
             }
+            bundle -> chain(input, partner.tls.caBundleBase64?.base64Decode()?.inputStream())
+        }
+    }
+
+    fun PartnerRelatedSecret(key: String) = PartnerRelatedSecret(
+        current = GSMReference("user", key),
+        next = GSMReference("user", key)
+    )
+
+    private fun handleSecret() {
+        if (secretName.isBlank()) {
+            error(input, "Secret name is required")
         }
 
         val config = Config(if (useStdin) readText() else Path(input).readText())
         val gcpSecretManager = config.extract<GCPSecretManager>("gcp-secret-manager")
         val projectName = ProjectName.of(gcpSecretManager.project)
-        val partner = config.extract<EAC>(configKey)
-
-        when {
-            hostName -> handleServer(partner.tls.hostName)
-            jwe -> secrets(projectName, partner.api?.partnerJWECertificates)?.forEach {
-                chain(
-                    input,
-                    it.base64Decode().inputStream()
-                )
-            }
-
-            tls -> partner.tls.clientCertificateBase64?.let { chain(input, it.base64Decode().inputStream()) }
-            bundle -> chain(input, partner.tls.caBundleBase64?.base64Decode()?.inputStream())
+        secrets(projectName, PartnerRelatedSecret(secretName))?.forEach { (name, value) ->
+            chain(
+                "$name from $projectName",
+                value.base64Decode().inputStream()
+            )
         }
     }
 
-    private fun secrets(projectName: ProjectName, partnerRelatedSecret: PartnerRelatedSecret?): List<String>? {
+    private fun secrets(projectName: ProjectName, partnerRelatedSecret: PartnerRelatedSecret?): Map<String, String>? {
         if (partnerRelatedSecret == null) {
             return null
         }
-        SecretManagerServiceClient.create().use { client ->
-            return listOf(partnerRelatedSecret.current, partnerRelatedSecret.next)
-                .map { it.latest(projectName) }
-                .map { client.accessSecretVersion(it) }
-                .map { it.payload.toString() }
-                .distinct()
-        }
-    }
+        try {
+            SecretManagerServiceClient.create().use { client ->
+                fun value(secret: GSMReference): Pair<String, String> =
+                    secret.key to (client.accessSecretVersion(secret.latest(projectName)).payload.data.toString(Charsets.US_ASCII)
+                        ?: "")
 
-    private fun getVaultKey(): String? {
-        val configKey = key
-        return when {
-            configKey.isNullOrBlank() -> null
-            "/quick-apply/" in configKey -> configKey
-            else -> "/v1/secret/member/quick-apply/$configKey"
-        }
-    }
-
-    private fun getEnv(name: String) = System.getenv(name).takeUnless { it.isNullOrBlank() }
-
-    private fun getVaultHost(): String {
-        return when {
-            !useStdin -> input
-            else -> getEnv("VAULT_ADDR") ?: ""
-        }
-    }
-
-    private fun getVaultToken(): String {
-        return getEnv("VAULT_TOKEN") ?: Path(System.getenv("HOME"), ".vault-token").readText()
-    }
-
-    private fun handleVault() {
-        val host = getVaultHost()
-        val vaultKey = getVaultKey()
-        if (vaultKey.isNullOrBlank()) {
-            info(input, "Key is required for vault")
-            return
-        }
-        val vaultToken = getVaultToken()
-        if (vaultToken.isBlank()) {
-            info(input, "Token is required for vault")
-            return
-        }
-
-        val request = Request(Method.GET, Uri.of(host).appendToPath(vaultKey))
-            .header("X-Vault-Token", vaultToken)
-        // We currently have to use the insecure client because the vault certificate issuer is not in our
-        // list of trusted root certificates
-        val client = OkHttp(PreCannedOkHttpClients.insecureOkHttpClient())
-        val response = client(request)
-        if (response.status.code != 200) {
-            info(input, "Vault did not return data")
-            return
-        }
-        val json: JsonElement = parser.parseToJsonElement(response.bodyString())
-        val data = json.jsonObject["data"]?.jsonObject?.get("value")?.jsonPrimitive?.content
-        if (data == null) {
-            info(input, "Vault did not return expected JSON")
-            return
-        }
-
-        with(writer) {
-            when (outputFormat) {
-                OutputFormat.BASE64 -> println(data)
-                OutputFormat.PEM -> println(data.base64Decode().decodeToString())
-                else -> chain(input, data.base64Decode().inputStream())
+                val current = value(partnerRelatedSecret.current)
+                if (partnerRelatedSecret.current.key == partnerRelatedSecret.next.key) {
+                    return mapOf(current)
+                } else {
+                    val next = value(partnerRelatedSecret.next)
+                    return if (current.second == next.second) {
+                        mapOf("${current.first} and ${next.first}" to current.second)
+                    } else {
+                        mapOf(current, next)
+                    }
+                }
             }
+        } catch (e: Exception) {
+            error(input, "Could not read secrets from ${projectName.project}: ${e.message?.lines()?.get(0)}")
         }
     }
 
