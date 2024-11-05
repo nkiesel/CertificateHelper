@@ -1,6 +1,9 @@
 import com.github.ajalt.clikt.completion.CompletionCandidates
 import com.github.ajalt.clikt.completion.completionOption
 import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.Context
+import com.github.ajalt.clikt.core.installMordantMarkdown
+import com.github.ajalt.clikt.core.main
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.default
 import com.github.ajalt.clikt.parameters.options.*
@@ -8,6 +11,8 @@ import com.github.ajalt.clikt.parameters.types.enum
 import com.github.ajalt.clikt.parameters.types.int
 import com.github.ajalt.mordant.rendering.TextColors.*
 import com.github.ajalt.mordant.terminal.Terminal
+import com.google.cloud.secretmanager.v1.ProjectName
+import com.google.cloud.secretmanager.v1.SecretManagerServiceClient
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
@@ -58,11 +63,11 @@ fun String?.hasContent() = !this.isNullOrEmpty()
 fun BooleanArray?.hasContent() = this != null && this.isNotEmpty()
 
 enum class InputFormat {
-    SERVER, JSON, PEM, BASE64, VAULT, CONFIG
+    SERVER, JSON, PEM, BASE64, CONFIG, SECRET,
 }
 
 enum class OutputFormat {
-    SUMMARY, TEXT, PEM, BASE64, CONFIG
+    SUMMARY, TEXT, PEM, BASE64
 }
 
 private const val terminalIO = "-"
@@ -118,26 +123,13 @@ private val extendedKeyUsages = mapOf(
 typealias X509List = List<X509Certificate>
 
 fun main(args: Array<String>) {
-    CertificateHelper().main(args)
+    CertificateHelper().run {
+        installMordantMarkdown()
+        main(args)
+    }
 }
 
-class CertificateHelper : CliktCommand(
-    name = "ch",
-    help = """
-        Reads or updates certificates from server, config, file, or vault.  Examples:
-        ```
-        ch -f server api.github.com
-        ch -f pem my_cert.pem
-        ```
-    """.trimIndent(),
-    epilog = """
-    Vault operations need a current vault token. This can be provided either via
-    the environment variable VAULT_TOKEN, or via the file `${'$'}HOME/.vault-token`.
-    The latter is automatically created when using the command "vault login". The
-    token (normally valid for 24 hours) can be generated after signing into the vault
-    and then using the "Copy Token" menu entry from the top-right user menu.
-    """.trimIndent(),
-) {
+class CertificateHelper : CliktCommand(name = "ch") {
     init {
         completionOption()
         versionOption(
@@ -145,6 +137,19 @@ class CertificateHelper : CliktCommand(
             names = setOf("--version")
         )
     }
+
+    override fun help(context: Context): String = """
+    Reads or updates certificates from server, config, file, or secret.  Examples:
+    ```
+    ch -f server api.github.com
+    ch -f pem my_cert.pem
+    ```
+    """.trimIndent()
+
+    override fun helpEpilog(context: Context): String = """
+    GSM operations need an access token. Run `gcloud auth application-default login`
+    to allow `ch` access to GSM.
+    """.trimIndent()
 
     private val inputOption by option(
         "-i", "--input", completionCandidates = CompletionCandidates.Path,
@@ -155,9 +160,9 @@ class CertificateHelper : CliktCommand(
     private val hostName by option("-n", "--hostName", help = "CA bundle using partner server name from config").flag()
     private val jwe by option("-j", "--jwe", help = "partner JWE info from config").flag()
     private val tls by option("--tls", help = "own TLS info from config").flag()
-    private val bundle by option("-b", "--bundle", help = "partner CA bundle info from config").flag(default = true)
+    private val bundle by option("-b", "--bundle", help = "partner CA bundle info from config").flag(default = false)
     private val key by option("-k", "--key", help = "partner config key")
-    private val cleanup by option("--cleanup", help = "Clean up certificates (remove duplicates, drop expired)").flag()
+    private val secretName by option("-s", "--secretName", help = "partner-related secret name").default("")
     private val port by option("-p", "--port", help = "partner server port").int().default(443)
     private val output by option(
         "-o", "--output", completionCandidates = CompletionCandidates.Path,
@@ -209,42 +214,24 @@ class CertificateHelper : CliktCommand(
         input = inputArgument.ifBlank { inputOption }
         useStdin = input == terminalIO
 
-        when (inputFormat) {
+        when (if (secretName.isNotBlank()) InputFormat.SECRET else inputFormat) {
             InputFormat.PEM, InputFormat.BASE64 -> handlePEM()
             InputFormat.SERVER -> handleServer()
             InputFormat.JSON -> handleJson()
             InputFormat.CONFIG -> handleConfig()
-            InputFormat.VAULT -> handleVault()
+            InputFormat.SECRET -> handleSecret()
         }
         writer.flush()
 
         val final = content.toString().let {
             when (outputFormat) {
-                OutputFormat.BASE64, OutputFormat.CONFIG -> it.base64Encode()
+                OutputFormat.BASE64 -> it.base64Encode()
                 else -> it
             }
         }
         when {
             output == terminalIO -> terminal.print(final)
-            outputFormat == OutputFormat.CONFIG -> updateConfig(final)
             else -> Path(output).writeText(final)
-        }
-    }
-
-    private fun updateConfig(content: String) {
-        val config = Path(output).readText()
-        val configKey = getConfigKey()
-        if (configKey.isNullOrBlank()) {
-            info(input, "Key is required for config files")
-            return
-        }
-        try {
-            val json = parser.parseToJsonElement(config).jsonObject
-            val updated = setJsonValue(json, "$configKey.tls.caBundleBase64", content)
-            Path(output).writeText(parser.encodeToString(updated))
-        } catch (e: Exception) {
-            info(output, "Cannot parse as JSON")
-            return
         }
     }
 
@@ -297,9 +284,8 @@ class CertificateHelper : CliktCommand(
             SSLSocketFactory.getDefault().createSocket().use {
                 it.connect(InetSocketAddress(address, port), timeout.inWholeMilliseconds.toInt())
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             error(host, "Could not connect to $address within $timeout")
-            return emptyList()
         }
 
         val socketFactory = tlsContext.apply {
@@ -308,9 +294,8 @@ class CertificateHelper : CliktCommand(
 
         val sslSocket = try {
             socketFactory.createSocket(address, port) as SSLSocket
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             error(host, "Could not connect to $address")
-            return emptyList()
         }
         sslSocket.use {
             try {
@@ -319,11 +304,7 @@ class CertificateHelper : CliktCommand(
             }
         }
 
-        val chain = tm.chain?.toMutableList()
-        if (chain == null) {
-            error(host, "Could not obtain server certificate chain for $address")
-            return emptyList()
-        }
+        val chain = tm.chain?.toMutableList() ?: error(host, "Could not obtain server certificate chain for $address")
 
         if (considerCertificate(chain.size)) {
             do {
@@ -369,7 +350,6 @@ class CertificateHelper : CliktCommand(
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
             error(input, "Key is required for config files")
-            return
         }
 
         val config = if (useStdin) readText() else Path(input).readText()
@@ -386,7 +366,6 @@ class CertificateHelper : CliktCommand(
         }
         if (json == null) {
             error(input, "Cannot extract $configKey")
-            return
         }
 
         if (hostName) {
@@ -396,100 +375,98 @@ class CertificateHelper : CliktCommand(
         }
     }
 
+    private inner class Config(config: String) {
+        val jsonElement = parser.parseToJsonElement(config)
+
+        inline fun <reified T> extract(name: String): T {
+            try {
+                return parser.decodeFromString<T>(parser.encodeToString(jsonElement.jsonObject[name]))
+            } catch (_: Exception) {
+                error(input, "Cannot extract $name")
+            }
+        }
+    }
+
     private fun handleConfig() {
-        val config = if (useStdin) readText() else Path(input).readText()
         val configKey = getConfigKey()
         if (configKey.isNullOrBlank()) {
             error(input, "Key is required for config files")
-            return
         }
-
-        val json = parser.parseToJsonElement(config).jsonObject[configKey]
-        if (json == null) {
-            error(input, "Cannot extract $configKey")
-            return
-        }
-
-        val partner = parser.decodeFromString<EAC>(parser.encodeToString(json))
-
+        val config = Config(if (useStdin) readText() else Path(input).readText())
+        val gcpSecretManager = config.extract<GCPSecretManager>("gcp-secret-manager")
+        val projectName = ProjectName.of(gcpSecretManager.project)
+        val partner = config.extract<EAC>(configKey)
         when {
             hostName -> handleServer(partner.tls.hostName)
-            jwe -> partner.api?.JWEPublicKeyBase64?.forEach { chain(input, it.base64Decode().inputStream()) }
-            tls -> partner.tls.clientCertificateBase64?.let { chain(input, it.base64Decode().inputStream()) }
+            jwe || tls -> secrets(
+                projectName,
+                if (jwe) partner.api?.partnerJWECertificates else partner.tls.ckTLSCertificates
+            )?.forEach { (name, value) ->
+                chain(
+                    "$name from $projectName",
+                    value.base64Decode().inputStream()
+                )
+            }
             bundle -> chain(input, partner.tls.caBundleBase64?.base64Decode()?.inputStream())
         }
     }
 
-    private fun getVaultKey(): String? {
-        val configKey = key
-        return when {
-            configKey.isNullOrBlank() -> null
-            "/quick-apply/" in configKey -> configKey
-            else -> "/v1/secret/member/quick-apply/$configKey"
+    fun PartnerRelatedSecret(key: String) = PartnerRelatedSecret(
+        current = GSMReference("user", key),
+        next = GSMReference("user", key)
+    )
+
+    private fun handleSecret() {
+        if (secretName.isBlank()) {
+            error(input, "Secret name is required")
+        }
+
+        val config = Config(if (useStdin) readText() else Path(input).readText())
+        val gcpSecretManager = config.extract<GCPSecretManager>("gcp-secret-manager")
+        val projectName = ProjectName.of(gcpSecretManager.project)
+        secrets(projectName, PartnerRelatedSecret(secretName))?.forEach { (name, value) ->
+            chain(
+                "$name from $projectName",
+                value.base64Decode().inputStream()
+            )
         }
     }
 
-    private fun getEnv(name: String) = System.getenv(name).takeUnless { it.isNullOrBlank() }
-
-    private fun getVaultHost(): String {
-        return when {
-            !useStdin -> input
-            else -> getEnv("VAULT_ADDR") ?: ""
+    private fun secrets(projectName: ProjectName, partnerRelatedSecret: PartnerRelatedSecret?): Map<String, String>? {
+        if (partnerRelatedSecret == null) {
+            return null
         }
-    }
+        try {
+            SecretManagerServiceClient.create().use { client ->
+                fun value(secret: GSMReference): Pair<String, String> =
+                    secret.key to (client.accessSecretVersion(secret.latest(projectName)).payload.data.toString(Charsets.US_ASCII)
+                        ?: "")
 
-    private fun getVaultToken(): String {
-        return getEnv("VAULT_TOKEN") ?: Path(System.getenv("HOME"), ".vault-token").readText()
-    }
-
-    private fun handleVault() {
-        val host = getVaultHost()
-        val vaultKey = getVaultKey()
-        if (vaultKey.isNullOrBlank()) {
-            info(input, "Key is required for vault")
-            return
-        }
-        val vaultToken = getVaultToken()
-        if (vaultToken.isBlank()) {
-            info(input, "Token is required for vault")
-            return
-        }
-
-        val request = Request(Method.GET, Uri.of(host).appendToPath(vaultKey))
-            .header("X-Vault-Token", vaultToken)
-        // We currently have to use the insecure client because the vault certificate issuer is not in our
-        // list of trusted root certificates
-        val client = OkHttp(PreCannedOkHttpClients.insecureOkHttpClient())
-        val response = client(request)
-        if (response.status.code != 200) {
-            info(input, "Vault did not return data")
-            return
-        }
-        val json: JsonElement = parser.parseToJsonElement(response.bodyString())
-        val data = json.jsonObject["data"]?.jsonObject?.get("value")?.jsonPrimitive?.content
-        if (data == null) {
-            info(input, "Vault did not return expected JSON")
-            return
-        }
-
-        with(writer) {
-            when (outputFormat) {
-                OutputFormat.BASE64 -> println(data)
-                OutputFormat.PEM -> println(data.base64Decode().decodeToString())
-                else -> chain(input, data.base64Decode().inputStream())
+                val current = value(partnerRelatedSecret.current)
+                if (partnerRelatedSecret.current.key == partnerRelatedSecret.next.key) {
+                    return mapOf(current)
+                } else {
+                    val next = value(partnerRelatedSecret.next)
+                    return if (current.second == next.second) {
+                        mapOf("${current.first} and ${next.first}" to current.second)
+                    } else {
+                        mapOf(current, next)
+                    }
+                }
             }
+        } catch (e: Exception) {
+            error(input, "Could not read secrets from ${projectName.project}: ${e.message?.lines()?.get(0)}")
         }
     }
 
     private fun chain(name: String, inputStream: InputStream?) {
         if (inputStream == null) {
             error(name, "No data")
-            return
         }
         inputStream.use { stream ->
             try {
                 process(name, certificateFactory.generateCertificates(stream).map { it as X509Certificate })
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 error(name, "Could not read as X509 certificate")
             }
         }
@@ -501,52 +478,13 @@ class CertificateHelper : CliktCommand(
         terminal.println("\n$name: $info")
     }
 
-    private fun error(name: String, info: String) {
+    private fun error(name: String, info: String): Nothing {
         info(name, red(info))
-    }
-
-    /**
-     * This removes duplicates and expired certificates from the list. It also sorts the certificates
-     * so that issuers of a certificate - if they are part of the list - come after the certificate.
-     */
-    private fun cleanup(list: X509List): X509List {
-        /**
-         *  Split the [candidates] into 2 lists: those who have an issuer in the [parents] list, and the rest
-         */
-        fun findChildren(parents: X509List, candidates: X509List): Pair<X509List, X509List> {
-            val parentIds = parents.map { it.subjectX500Principal }
-            return candidates.partition { it.issuerX500Principal in parentIds }
-        }
-
-        // Filter and sort and split into root certs and the rest
-        val now = Instant.now()
-        var (issuers, candidates) = list
-            .filter { it.notAfter.toInstant() >= now }
-            .distinctBy { it.subjectX500Principal }
-            .sortedBy { cert -> cert.notAfter }
-            .partition { it.subjectX500Principal == it.issuerX500Principal }
-
-        // Add immediate children of issuers to issuers
-        while (candidates.isNotEmpty()) {
-            findChildren(issuers, candidates).let { (children, remaining) ->
-                if (children.isEmpty()) {
-                    // could not find any cert in candidates issued by issuer
-                    issuers += remaining
-                    candidates = emptyList()
-                } else {
-                    issuers += children
-                    candidates = remaining
-                }
-            }
-        }
-
-        // We want the leaf certs first, so reversing the list
-        return issuers.reversed()
+        exitProcess(1)
     }
 
     private fun process(name: String, certificates: X509List) {
-        val certs = if (cleanup) cleanup(certificates) else certificates
-        for (cert in certs.withIndex()) {
+        for (cert in certificates.withIndex()) {
             if (considerCertificate(cert.index)) {
                 certificate(cert.value, name)
             }
@@ -557,7 +495,7 @@ class CertificateHelper : CliktCommand(
         when (outputFormat) {
             OutputFormat.SUMMARY -> certificateSummary(cert, name)
             OutputFormat.TEXT -> certificateText(cert, name)
-            OutputFormat.BASE64, OutputFormat.PEM, OutputFormat.CONFIG -> certificatePem(cert)
+            OutputFormat.BASE64, OutputFormat.PEM -> certificatePem(cert)
         }
     }
 
