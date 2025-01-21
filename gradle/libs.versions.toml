@@ -1,13 +1,13 @@
 [versions]
-clikt = "5.0.1"
-gcsm = "2.53.0"
-http4k = "5.33.1.0"
+clikt = "5.0.2"
+gcsm = "2.56.0"
+http4k = "5.45.2.0"
 junit5 = "5.11.3"
 mordant = "3.0.1"
 plugin-versions = "0.51.0"
 plugin-versionsFilter = "0.1.16"
 plugin-versionsUpdate = "0.8.5"
-serialization = "1.7.3"
+serialization = "1.8.0"
 
 [libraries]
 clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
@@ -16,7 +16,7 @@ google-cloud-secretmanager = { module = "com.google.cloud:google-cloud-secretman
 http4k-client-okhttp = { module = "org.http4k:http4k-client-okhttp", version.ref = "http4k" }
 http4k-core = { module = "org.http4k:http4k-core", version.ref = "http4k" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit5" }
-junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit5" }
+junit-jupiter = "org.junit.jupiter:junit-jupiter:5.11.4"
 kotlin-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 mordant = { module = "com.github.ajalt.mordant:mordant", version.ref = "mordant" }
 
