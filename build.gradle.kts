@@ -3,7 +3,7 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
 plugins {
-    val kotlinVersion = "2.1.0"
+    val kotlinVersion = "2.1.20"
     kotlin("jvm") version kotlinVersion
     kotlin("plugin.serialization") version kotlinVersion
     alias(libs.plugins.versions)
@@ -13,7 +13,7 @@ plugins {
 }
 
 group = "nkiesel.org"
-version = "3.0.0"
+version = "3.0.1"
 
 repositories {
     mavenCentral()
