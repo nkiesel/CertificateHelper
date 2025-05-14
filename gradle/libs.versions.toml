@@ -1,8 +1,8 @@
 [versions]
 clikt = "5.0.3"
-gcsm = "2.60.0"
-http4k = "6.6.0.1"
-junit5 = "5.11.3"
+gcsm = "2.62.0"
+http4k = "6.9.0.0"
+junit5 = "5.12.2"
 mordant = "3.0.2"
 plugin-versions = "0.52.0"
 plugin-versionsFilter = "0.1.16"
