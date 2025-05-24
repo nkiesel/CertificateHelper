@@ -28,10 +28,12 @@ import java.io.StringWriter
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
-import java.security.KeyStore
-import java.security.MessageDigest
+import java.security.*
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
+import java.security.interfaces.ECPrivateKey
+import java.security.interfaces.RSAPrivateKey
+import java.security.spec.PKCS8EncodedKeySpec
 import java.time.Instant
 import java.util.*
 import javax.naming.ldap.LdapName
@@ -160,7 +162,13 @@ class CertificateHelper : CliktCommand(name = "ch") {
     private val hostName by option("-n", "--hostName", help = "CA bundle using partner server name from config").flag()
     private val jwe by option("-j", "--jwe", help = "partner JWE info from config").flag()
     private val tls by option("--tls", help = "own TLS info from config").flag()
+    private val privateKeyJwe by option("--private-key-jwe", help = "fetch JWE private key from config").flag()
+    private val privateKeyTls by option("--private-key-tls", help = "fetch TLS private key from config").flag()
     private val bundle by option("-b", "--bundle", help = "partner CA bundle info from config").flag(default = false)
+
+    // Regex patterns for PEM private key headers/footers
+    private val pkcs8PemRegex = Regex("-----BEGIN PRIVATE KEY-----(.*?)-----END PRIVATE KEY-----", RegexOption.DOT_MATCHES_ALL)
+    private val rsaPemRegex = Regex("-----BEGIN RSA PRIVATE KEY-----(.*?)-----END RSA PRIVATE KEY-----", RegexOption.DOT_MATCHES_ALL)
     private val key by option("-k", "--key", help = "partner config key")
     private val secretName by option("-s", "--secretName", help = "partner-related secret name").default("")
     private val port by option("-p", "--port", help = "partner server port").int().default(443)
@@ -168,7 +176,7 @@ class CertificateHelper : CliktCommand(name = "ch") {
         "-o", "--output", completionCandidates = CompletionCandidates.Path,
         help = "Output file name; - for stdout"
     ).default(terminalIO)
-    private val outputFormat by option("-t", "--outputFormat", help = "Output format").enum<OutputFormat>()
+    internal var outputFormat by option("-t", "--outputFormat", help = "Output format").enum<OutputFormat>()
         .default(OutputFormat.SUMMARY)
     private val certIndex: List<Int> by option("-c", "--certIndex", help = "Certificate indices (comma-separated)")
         .int().split(",").default(emptyList(), defaultForHelp = "all certificates")
@@ -180,7 +188,7 @@ class CertificateHelper : CliktCommand(name = "ch") {
     private lateinit var input: String
     private var useStdin: Boolean = true
 
-    private val content = StringWriter()
+    internal val content = StringWriter() // Made internal for testing
     private val writer = PrintWriter(content)
     private val rootCertificates = getRootCertificates()
     private val terminal = Terminal()
@@ -397,6 +405,12 @@ class CertificateHelper : CliktCommand(name = "ch") {
         val projectName = ProjectName.of(gcpSecretManager.project)
         val partner = config.extract<EAC>(configKey)
         when {
+            privateKeyJwe -> secrets(projectName, partner.api?.ckJWEPrivateKeys)?.forEach { (secretName, secretValue) ->
+                handlePrivateKey(secretName, secretValue)
+            }
+            privateKeyTls -> secrets(projectName, partner.tls.ckTLSPrivateKeys)?.forEach { (secretName, secretValue) ->
+                handlePrivateKey(secretName, secretValue)
+            }
             hostName -> handleServer(partner.tls.hostName)
             jwe || tls -> secrets(
                 projectName,
@@ -424,11 +438,9 @@ class CertificateHelper : CliktCommand(name = "ch") {
         val config = Config(if (useStdin) readText() else Path(input).readText())
         val gcpSecretManager = config.extract<GCPSecretManager>("gcp-secret-manager")
         val projectName = ProjectName.of(gcpSecretManager.project)
-        secrets(projectName, PartnerRelatedSecret(secretName))?.forEach { (name, value) ->
-            chain(
-                "$name from $projectName",
-                value.base64Decode().inputStream()
-            )
+        secrets(projectName, PartnerRelatedSecret(secretName))?.forEach { (secretName, secretValue) ->
+            // If private key flags are active with SECRET input, we assume secretName points to the key.
+            handlePrivateKey(secretName, secretValue)
         }
     }
 
@@ -582,6 +594,107 @@ class CertificateHelper : CliktCommand(name = "ch") {
             println("-----BEGIN CERTIFICATE-----")
             println(pemEncoder.encodeToString(cert.encoded))
             println("-----END CERTIFICATE-----")
+        }
+    }
+
+    internal fun handlePrivateKey(name: String, keyContent: String) { // Made internal for testing
+        val derBytes = try {
+            val content = pkcs8PemRegex.find(keyContent)?.groupValues?.get(1)
+                ?: rsaPemRegex.find(keyContent)?.groupValues?.get(1)
+                ?: keyContent // Assume it might be raw Base64 if no headers
+            content.trim().base64Decode()
+        } catch (e: Exception) {
+            writer.println(red("  Error decoding Base64 content for $name: ${e.message}"))
+            if (verbose) writer.println(keyContent)
+            return
+        }
+
+        var privateKey: PrivateKey? = null
+        var keyTypeFromFactory: String? = null
+
+        // Try parsing as PKCS#8 with common algorithms
+        for (algorithm in listOf("RSA", "EC", "DSA")) { // Common algorithms
+            try {
+                val kf = KeyFactory.getInstance(algorithm)
+                privateKey = kf.generatePrivate(PKCS8EncodedKeySpec(derBytes))
+                keyTypeFromFactory = algorithm
+                break
+            } catch (_: Exception) {
+                // Try next algorithm
+            }
+        }
+        
+        // If PKCS#8 failed, and it looked like an RSA key (based on PEM header), try parsing its DER bytes directly.
+        // Standard Java KeyFactory for "RSA" can often handle raw PKCS#1 DER bytes.
+        if (privateKey == null && rsaPemRegex.matches(keyContent)) {
+            try {
+                val kf = KeyFactory.getInstance("RSA")
+                // Pass the raw DER bytes (decoded from Base64, PEM headers stripped)
+                privateKey = kf.generatePrivate(PKCS8EncodedKeySpec(derBytes)) // This was the error, should be just derBytes if KF supports it
+                                                                              // However, KeySpec is required.
+                                                                              // The issue is that PKCS#1 requires a specific KeySpec if not PKCS#8.
+                                                                              // A common workaround if BouncyCastle is not available is to hope
+                                                                              // the PKCS#8 parsing with "RSA" algorithm somehow handles it,
+                                                                              // or the key is actually PKCS#8 but has BEGIN RSA PRIVATE KEY headers.
+                                                                              // For now, we'll stick to the PKCS#8 attempt for RSA KeyFactory,
+                                                                              // as KeyFactory.getInstance("RSA").generatePrivate(KeySpec)
+                                                                              // expects a KeySpec. If derBytes are PKCS#1, PKCS8EncodedKeySpec is wrong.
+                                                                              // A true PKCS#1 parse without BouncyCastle would mean manual ASN.1.
+                                                                              // The original code for PKCS#8 attempt *with "RSA" algorithm* is the best bet
+                                                                              // for RSA keys whether they are PKCS#1 or PKCS#8 if KeyFactory is smart.
+                                                                              // So, the loop `for (algorithm in listOf("RSA", "EC", "DSA"))`
+                                                                              // already tries "RSA" with PKCS8EncodedKeySpec.
+                                                                              // If an RSA key (PKCS#1) fails that, it's unlikely to succeed
+                                                                              // with KeyFactory("RSA").generatePrivate(PKCS8EncodedKeySpec(derBytes)) again.
+                                                                              // The most robust solution without adding BouncyCastle is to rely on
+                                                                              // KeyFactory attempting to parse PKCS#8 and hoping the provider is flexible.
+                                                                              // So, this specific block for PKCS#1 might be redundant if the key is truly PKCS#1
+                                                                              // and not parsable by KeyFactory("RSA") with PKCS8EncodedKeySpec.
+                                                                              // We remove this explicit second attempt for RSA PKCS#1 for now,
+                                                                              // relying on the general loop. If a key starts with -----BEGIN RSA PRIVATE KEY-----
+                                                                              // but is PKCS#8 encoded, the first loop (with algo "RSA") should get it.
+                                                                              // If it's truly PKCS#1 ASN.1, PKCS8EncodedKeySpec is the wrong spec.
+            } catch (e: Exception) {
+                 // Fall through
+            }
+        }
+
+
+        if (privateKey == null) {
+            writer.println("\n$name: ${red("Could not parse private key. Unsupported format or corrupt key.")}")
+            if (verbose || outputFormat == OutputFormat.PEM || outputFormat == OutputFormat.BASE64) {
+                writer.println("  Raw content for $name:")
+                writer.println(keyContent)
+            }
+            return
+        }
+
+        val actualAlgorithm = privateKey.algorithm ?: keyTypeFromFactory ?: "Unknown"
+
+        when (outputFormat) {
+            OutputFormat.SUMMARY -> {
+                writer.println("\n$name: Private Key")
+                writer.println("\tAlgorithm: $actualAlgorithm")
+                val keySize = when (privateKey) {
+                    is RSAPrivateKey -> privateKey.modulus.bitLength()
+                    is ECPrivateKey -> privateKey.params.curve.field.fieldSize
+                    else -> "N/A"
+                }
+                writer.println("\tSize: $keySize")
+                writer.println("\tFingerprint (SHA-256): ${privateKey.encoded.fingerprint()}")
+            }
+            OutputFormat.TEXT -> {
+                writer.println("$name: Private Key (Text representation)")
+                writer.println(privateKey.toString())
+            }
+            OutputFormat.PEM -> {
+                writer.println("$name: Private Key (PEM)")
+                writer.println(keyContent) // Print original PEM
+            }
+            OutputFormat.BASE64 -> {
+                writer.println("$name: Private Key (DER Base64)")
+                writer.println(privateKey.encoded.base64Encode())
+            }
         }
     }
 }

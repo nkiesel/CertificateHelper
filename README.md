@@ -2,9 +2,43 @@
 
 ## Overview
 
-This is a simple helper program to handle X509 certificates in various formats. It allows to download the full
-certificate chain from a server (up to and including the root certificate), and show a summary or store it as a PEM
-file (optionally Base64 encoded).
+This is a simple helper program to handle X509 certificates and private keys in various formats. 
+It allows to download the full certificate chain from a server (up to and including the root certificate), 
+and show a summary or store it as a PEM file (optionally Base64 encoded).
+It can also fetch and display private keys (e.g., RSA, EC) referenced in configuration files 
+or stored in Google Secret Manager (GSM).
+
+**Certificate Handling:**
+The tool can read certificates from files (PEM or Base64 encoded), directly from servers (TLS handshake),
+or from JSON configurations that specify certificate locations.
+
+**Private Key Handling:**
+The tool can fetch private keys when using `CONFIG` or `SECRET` input modes.
+The new flags `--private-key-jwe` and `--private-key-tls` are used to specify which private key to fetch
+from the configuration (e.g., `api.ckJWEPrivateKeys` or `tls.ckTLSPrivateKeys` respectively for `CONFIG` mode) 
+or directly from GSM if `SECRET` input format is used (where the `-s, --secretName` would point to the private key).
+
+**Output Formats:**
+
+When handling **certificates**, the `-t, --outputFormat` option provides:
+* `SUMMARY`: A human-readable summary including common name, issuer, validity, fingerprint, key usage, and DNS names.
+* `TEXT`: The full certificate details as text (note: this is not the same as `openssl x509 -text`).
+* `PEM`: The certificate in PEM format (`-----BEGIN CERTIFICATE-----...`).
+* `BASE64`: The Base64 encoded DER representation of the certificate.
+* `CONFIG`: Updates a JSON configuration file with the fetched certificate(s).
+
+When handling **private keys** (using `--private-key-jwe` or `--private-key-tls`), the `-t, --outputFormat` option provides:
+* `SUMMARY`: Displays key algorithm (e.g., RSA, EC), key size, and SHA-256 fingerprint of the encoded key.
+    ```text
+    [key_name]: Private Key
+        Algorithm: RSA
+        Size: 2048
+        Fingerprint (SHA-256): [hex_fingerprint]
+    ```
+* `TEXT`: The default `toString()` representation of the private key object (Java provider specific).
+* `PEM`: The private key in its original PEM format (e.g., `-----BEGIN PRIVATE KEY-----...`).
+* `BASE64`: The Base64 encoded DER representation of the private key (PKCS#8).
+* `CONFIG`: This format is typically not used for outputting private keys directly.
 
 ## Installation
 
@@ -78,14 +112,23 @@ will print the summary of a Base64-encoded PEM chain stored in `config/dev.json`
 ```
 
 For historical reasons, a JSON config file in a proprietary format can be used with `--inputFormat=CONFIG`, 
-where key will be extended by `.tls.hostName` for hostname lookups and by `.tls.caBundleBase64` otherwise. Thus, the 
-above command for such config files could be further shortened to
+where `key` will be extended by:
+* `.tls.hostName` for hostname lookups (when `-n, --hostName` is used).
+* `.api.partnerJWECertificates` for JWE certificates (when `-j, --jwe` is used).
+* `.tls.ckTLSCertificates` for own TLS certificates (when `--tls` is used).
+* `.tls.caBundleBase64` for CA bundles (when `-b, --bundle` is used, or by default if no other specific flag is provided for `CONFIG` mode).
+* `.api.ckJWEPrivateKeys` for JWE private keys (when `--private-key-jwe` is used).
+* `.tls.ckTLSPrivateKeys` for TLS private keys (when `--private-key-tls` is used).
+
+Example for `CONFIG` mode:
 ```shell
-ch -i config/dev.json -k github
+ch -i config/dev.json -k mypartner -b # Fetches CA bundle for mypartner.tls.caBundleBase64
+ch -i config/dev.json -k mypartner --private-key-jwe # Fetches JWE private key for mypartner.api.ckJWEPrivateKeys
 ```
 
 If you are only interested in a single certificate instead of the whole certificate chain, then you can use the 
-`--certIndex` option to select that certificate. The leaf certificate always has index 0.  Thus, to only get the 
+`--certIndex` option to select that certificate. This option is not applicable when fetching private keys.
+The leaf certificate always has index 0.  Thus, to only get the 
 leaf certificate from a server, add `-c 0`, and use `-c0,3` to get the 1st and 4th certificate in a chain.
 
 Run `ch --help` to see all the options:
@@ -105,12 +148,14 @@ Options:
   -n, --hostName                                           CA bundle using partner server name from config
   -j, --jwe                                                partner JWE info from config
   --tls                                                    own TLS info from config
+  --private-key-jwe                                      Fetch JWE private key from config/GSM.
+  --private-key-tls                                      Fetch TLS private key from config/GSM.
   -b, --bundle                                             partner CA bundle info from config
   -k, --key=<text>                                         partner config key
   --cleanup                                                Clean up certificates (remove duplicates, drop expired)
   -p, --port=<int>                                         partner server port
   -o, --output=<text>                                      Output file name; - for stdout
-  -t, --outputFormat=(SUMMARY|TEXT|PEM|BASE64|CONFIG)      Output format
+  -t, --outputFormat=(SUMMARY|TEXT|PEM|BASE64|CONFIG)      Output format. Varies for private keys.
   -c, --certIndex=<int>                                    Certificate indices (comma-separated)
   --timeout=<value>                                        Server connection timeout; 0s for no timeout
   -h, --help                                               Show this message and exit
