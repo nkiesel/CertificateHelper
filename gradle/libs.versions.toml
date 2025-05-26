@@ -17,6 +17,7 @@ google-cloud-secretmanager = { module = "com.google.cloud:google-cloud-secretman
 http4k-client-okhttp = { module = "org.http4k:http4k-client-okhttp", version.ref = "http4k" }
 http4k-core = { module = "org.http4k:http4k-core", version.ref = "http4k" }
 http4k-server-netty = { module = "org.http4k:http4k-server-netty", version.ref = "http4k" }
+http4k-multipart = { module = "org.http4k:http4k-multipart", version.ref = "http4k" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit5" }
 junit-jupiter = "org.junit.jupiter:junit-jupiter:5.12.2"
 kotlin-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }

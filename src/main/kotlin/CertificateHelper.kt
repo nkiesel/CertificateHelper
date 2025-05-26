@@ -1,3 +1,5 @@
+package nkiesel.org
+
 import com.github.ajalt.clikt.completion.CompletionCandidates
 import com.github.ajalt.clikt.completion.completionOption
 import com.github.ajalt.clikt.core.CliktCommand
@@ -128,7 +130,7 @@ fun main(args: Array<String>) = CertificateHelper().main(args)
 class ServeWeb : CliktCommand(name = "serve", help = "Start the web server interface") {
     override fun run() {
         currentContext.terminal.println("Starting web server...")
-        val webServer = nkiesel.org.WebServer()
+        val webServer = WebServer() // Simplified as both are in nkiesel.org
         webServer.start()
         // Keep the main thread alive, otherwise the server will stop immediately.
         // A more robust solution might involve a proper lifecycle manager.
