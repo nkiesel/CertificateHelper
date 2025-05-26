@@ -1,8 +1,14 @@
 package nkiesel.org
 
-import org.http4k.core.*
+import org.http4k.core.HttpHandler
+import org.http4k.core.Method
+import org.http4k.core.Request
+import org.http4k.core.Response
+import org.http4k.core.Status
+import org.http4k.core.Uri
+import org.http4k.core.MultipartForm // Added explicit import
 import org.http4k.core.body.form
-import org.http4k.lens.*
+import org.http4k.lens.LensFailure
 import org.http4k.routing.bind
 import org.http4k.routing.routes
 import org.http4k.server.Netty

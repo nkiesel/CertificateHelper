@@ -1,3 +1,5 @@
+package nkiesel.org
+
 import com.google.cloud.secretmanager.v1.ProjectName
 import com.google.cloud.secretmanager.v1.SecretVersionName
 import kotlinx.serialization.SerialName

@@ -140,13 +140,13 @@ class ServeWeb : CliktCommand(name = "serve", help = "Start the web server inter
 
 class CertificateHelper : CliktCommand(name = "ch") {
     init {
-        installMordantMarkdown()
+        // installMordantMarkdown()
         subcommands(ServeWeb())
-        completionOption()
-        versionOption(
-            javaClass.getResourceAsStream("version")?.bufferedReader()?.use { it.readLine() } ?: "development",
-            names = setOf("--version")
-        )
+        // completionOption()
+        // versionOption(
+        //     javaClass.getResourceAsStream("version")?.bufferedReader()?.use { it.readLine() } ?: "development",
+        //     names = setOf("--version")
+        // )
     }
 
     override fun help(context: Context): String = """
