@@ -21,10 +21,11 @@ export JAVA_HOME=/var/lib/jdk/openjdk-17
 export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home
 ```
 
-Once you have Java 17 installed, you can build the Jar using `./gradlew clean uber` to generate an "uber" (or "fat") 
+Once you have Java 17 installed, you can build the Jar using `./gradlew clean uberJar` to generate an "uber" (or "fat") 
 jar (which includes all the 3rd party dependencies). This will produce a single jar file in `build/libs`.  You can
 then test the build running `java -jar build/libs/*.jar --help`. If this complains about Java not found or being an 
 incompatible version, try `$JAVA_HOME/bin/java -jar build/libs/*.jar --help`.
+The command was updated from `uber` to `uberJar` in later Gradle versions.
 
 ## Usage
 
@@ -90,33 +91,40 @@ leaf certificate from a server, add `-c 0`, and use `-c0,3` to get the 1st and 4
 
 Run `ch --help` to see all the options:
 ```text
-Usage: ch [<options>]
+Usage: ch [<options>] [<command>]
 
-  Reads or updates certificates from server, config, file, or vault. Example:
+  Reads or updates certificates from server, config, file, or secret.
+  Examples:
   ╭──────────────────────────────╮
-  │ch -f server -i api.github.com│
+  │ch -f server api.github.com   │
+  │ch -f pem my_cert.pem         │
   ╰──────────────────────────────╯
 
 Options:
   --generate-completion=(bash|zsh|fish)
-  -v, --version                                            Show the version and exit
-  -i, --input=<text>                                       Input file or server name; - for stdin
-  -f, --inputFormat=(SERVER|JSON|PEM|BASE64|VAULT|CONFIG)  Input format
+  --version                                                Show the version and exit
+  -i, --input=<text>                                       Input file or server name; - for stdin (default: "-")
+  -f, --inputFormat=(SERVER|JSON|PEM|BASE64|CONFIG|SECRET) Input format (default: CONFIG)
   -n, --hostName                                           CA bundle using partner server name from config
   -j, --jwe                                                partner JWE info from config
   --tls                                                    own TLS info from config
   -b, --bundle                                             partner CA bundle info from config
   -k, --key=<text>                                         partner config key
-  --cleanup                                                Clean up certificates (remove duplicates, drop expired)
-  -p, --port=<int>                                         partner server port
-  -o, --output=<text>                                      Output file name; - for stdout
-  -t, --outputFormat=(SUMMARY|TEXT|PEM|BASE64|CONFIG)      Output format
-  -c, --certIndex=<int>                                    Certificate indices (comma-separated)
-  --timeout=<value>                                        Server connection timeout; 0s for no timeout
+  -s, --secretName=<text>                                  partner-related secret name (default: "")
+  -p, --port=<int>                                         partner server port (default: 443)
+  -o, --output=<text>                                      Output file name; - for stdout (default: "-")
+  -t, --outputFormat=(SUMMARY|TEXT|PEM|BASE64)             Output format (default: SUMMARY)
+  -c, --certIndex=<int>                                    Certificate indices (comma-separated) (default: all certificates)
+  --timeout=<value>                                        Server connection timeout; 0s for no timeout (default: 5s)
+  --rootCAs=<text>                                         list root CAs, filter with optional regex (default: .*)
+  -v, --verbose                                            more verbose output
   -h, --help                                               Show this message and exit
 
-Vault operations need a current vault token. This can be provided either via the environment variable VAULT_TOKEN, or via the file $HOME/.vault-token. The latter is automatically created when using the command "vault login". The token (normally valid for 24 hours) can be generated
-after signing into the vault and then using the "Copy Token" menu entry from the top-right user menu.
+Commands:
+  serve  Start the web server interface
+
+GSM operations need an access token. Run `gcloud auth application-default login`
+to allow `ch` access to GSM.
 ```
 
 Note: The `text` output format is a non-standard format and not the usual `openssl x509 -text` format. If you need
@@ -151,3 +159,32 @@ All these assume you use the `ch` function described above.
     ```shell
     ch -f server -i api.github.com -t config -k github -o config.json
     ```
+
+## Web-based GUI
+
+As an alternative to the CLI, a web-based GUI is available.
+
+You can start the web server using the `serve` command:
+`java -jar build/libs/CertificateHelper-3.0.1-uber.jar serve`
+(If you have the `ch` shell function defined as shown earlier, you might need to adapt it or call the JAR directly for the `serve` command.)
+
+The GUI is then accessible at `http://localhost:8080/`.
+
+## Docker Support
+
+The application can also be run as a Docker container.
+
+### Building the Docker Image
+1. Ensure Docker is installed and running.
+2. To build the Docker image, use the provided Gradle task:
+   ```shell
+   ./gradlew dockerBuildImageFromDockerfile
+   ```
+3. This command will use the `Dockerfile` in the project root and tag the image as `certificatehelper:3.0.1`.
+
+### Running the Docker Container
+1. Once the image is built, run it using:
+   ```shell
+   docker run -p 8080:8080 certificatehelper:3.0.1
+   ```
+2. The web GUI will then be available at `http://localhost:8080/`.

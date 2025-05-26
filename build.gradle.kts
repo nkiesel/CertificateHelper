@@ -1,3 +1,4 @@
+import com.bmuschko.gradle.docker.tasks.image.DockerBuildImage
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
@@ -9,6 +10,7 @@ plugins {
     alias(libs.plugins.versions)
     alias(libs.plugins.versions.filter)
     alias(libs.plugins.versions.update)
+    alias(libs.plugins.bmuschkoDockerRemoteApi)
     application
 }
 
@@ -84,4 +86,14 @@ tasks.register("generateVersionProperties") {
 
 tasks.named("processResources") {
     dependsOn("generateVersionProperties")
+}
+
+tasks.register<DockerBuildImage>("dockerBuildImageFromDockerfile") {
+    dependsOn(tasks.named("uberJar"))
+    dockerFile.set(file("Dockerfile")) // Assumes Dockerfile is in the project root
+    images.add("certificatehelper:${project.version}")
+    // The build context defaults to the project directory, which is usually correct.
+    // If Dockerfile needs files from a specific subdirectory for ADD/COPY,
+    // you might set inputDir.set(file("some/subdir"))
+    // but for a root Dockerfile copying from build/libs, this is fine.
 }

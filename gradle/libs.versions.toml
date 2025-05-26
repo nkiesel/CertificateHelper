@@ -8,6 +8,7 @@ plugin-versions = "0.52.0"
 plugin-versionsFilter = "0.1.16"
 plugin-versionsUpdate = "1.0.0"
 serialization = "1.8.1"
+bmuschkoDocker = "9.4.0"
 
 [libraries]
 clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
@@ -25,3 +26,4 @@ mordant = { module = "com.github.ajalt.mordant:mordant", version.ref = "mordant"
 versions = { id = "com.github.ben-manes.versions", version.ref = "plugin-versions" }
 versions-filter = { id = "se.ascp.gradle.gradle-versions-filter", version.ref = "plugin-versionsFilter" }
 versions-update = { id = "nl.littlerobots.version-catalog-update", version.ref = "plugin-versionsUpdate" }
+bmuschkoDockerRemoteApi = { id = "com.bmuschko.docker-remote-api", version.ref = "bmuschkoDocker" }
