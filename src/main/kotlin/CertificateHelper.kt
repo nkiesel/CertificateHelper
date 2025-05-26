@@ -44,10 +44,9 @@ class ServeWeb : CliktCommand(name = "serve", help = "Start the web server inter
 }
 
 class CertificateHelper : CliktCommand(name = "ch") {
-    init {
-        subcommands(ServeWeb())
-        // Ensure other init block items like installMordantMarkdown, etc., remain commented or removed.
-    }
+    // init { // init block can be removed if empty
+        // subcommands(ServeWeb()) // This line is now commented out
+    // }
     override fun run() {
         // This is the required run method.
         // currentContext.terminal.println("Minimal CertificateHelper executed") // For testing
