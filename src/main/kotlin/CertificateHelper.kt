@@ -3,7 +3,7 @@ import com.github.ajalt.clikt.completion.completionOption
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.Context
 import com.github.ajalt.clikt.core.installMordantMarkdown
-import com.github.ajalt.clikt.core.main
+import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.default
 import com.github.ajalt.clikt.parameters.options.*
@@ -38,7 +38,6 @@ import javax.naming.ldap.LdapName
 import javax.net.ssl.*
 import javax.security.auth.x500.X500Principal
 import kotlin.io.path.*
-import kotlin.system.exitProcess
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
@@ -48,6 +47,8 @@ private val hexFormat = HexFormat.ofDelimiter("").withUpperCase()
 private val certificateFactory = CertificateFactory.getInstance("X.509")
 private val pemEncoder = Base64.getMimeEncoder(64, "\n".toByteArray())
 private val tlsContext = SSLContext.getInstance("TLS")
+
+class CertificateHelperException(message: String) : RuntimeException(message)
 
 fun ByteArray.sha256(): ByteArray = sha256.digest(this)
 fun ByteArray.hex(): String = hexFormat.formatHex(this)
@@ -122,15 +123,23 @@ private val extendedKeyUsages = mapOf(
 
 typealias X509List = List<X509Certificate>
 
-fun main(args: Array<String>) {
-    CertificateHelper().run {
-        installMordantMarkdown()
-        main(args)
+fun main(args: Array<String>) = CertificateHelper().main(args)
+
+class ServeWeb : CliktCommand(name = "serve", help = "Start the web server interface") {
+    override fun run() {
+        currentContext.terminal.println("Starting web server...")
+        val webServer = nkiesel.org.WebServer()
+        webServer.start()
+        // Keep the main thread alive, otherwise the server will stop immediately.
+        // A more robust solution might involve a proper lifecycle manager.
+        Thread.currentThread().join()
     }
 }
 
 class CertificateHelper : CliktCommand(name = "ch") {
     init {
+        installMordantMarkdown()
+        subcommands(ServeWeb())
         completionOption()
         versionOption(
             javaClass.getResourceAsStream("version")?.bufferedReader()?.use { it.readLine() } ?: "development",
@@ -177,10 +186,10 @@ class CertificateHelper : CliktCommand(name = "ch") {
     private val rootCAs by option("--rootCAs", help = "list root CAs, filter with optional regex").optionalValue(".*")
     private val verbose by option("-v", "--verbose", help = "more verbose output").flag()
     private val inputArgument by argument("input", help = "Input file or server name; - for stdin").default("")
-    private lateinit var input: String
-    private var useStdin: Boolean = true
+    internal lateinit var input: String // Made internal for WebServer access if needed
+    internal var useStdin: Boolean = true // Made internal for WebServer access if needed
 
-    private val content = StringWriter()
+    val content = StringWriter() // Made public for WebServer access
     private val writer = PrintWriter(content)
     private val rootCertificates = getRootCertificates()
     private val terminal = Terminal()
@@ -203,12 +212,18 @@ class CertificateHelper : CliktCommand(name = "ch") {
     override fun run() {
         val pattern = rootCAs?.toRegex()
         if (pattern != null) {
-            for (cert in rootCertificates.filter { it.key.toString().contains(pattern) }) {
-                certificateSummary(cert.value)
+            try {
+                for (cert in rootCertificates.filter { it.key.toString().contains(pattern) }) {
+                    certificateSummary(cert.value)
+                }
+                writer.flush()
+                // For web server, actual printing/output is handled by WebServer
+                // print(content.toString()) 
+            } catch (e: CertificateHelperException) {
+                throw e // Re-throw to be caught by web server
             }
-            writer.flush()
-            print(content.toString())
-            exitProcess(0)
+            // exitProcess(0) // Avoid exiting in web server context
+            return // Early exit for rootCA listing
         }
 
         input = inputArgument.ifBlank { inputOption }
@@ -475,12 +490,15 @@ class CertificateHelper : CliktCommand(name = "ch") {
     private fun readText() = generateSequence(::readLine).joinToString("\n")
 
     private fun info(name: String, info: String) {
-        terminal.println("\n$name: $info")
+        val message = "\n$name: $info" // Construct the message
+        terminal.println(message)      // Existing line for CLI
+        writer.println(message)        // New line to capture for web GUI
     }
 
     private fun error(name: String, info: String): Nothing {
         info(name, red(info))
-        exitProcess(1)
+        // exitProcess(1) // Replaced with exception for web server
+        throw CertificateHelperException("$name: ${red(info)}")
     }
 
     private fun process(name: String, certificates: X509List) {

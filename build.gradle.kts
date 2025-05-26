@@ -24,6 +24,7 @@ dependencies {
     implementation(libs.clikt.markdown)
     implementation(libs.kotlin.serialization)
     implementation(libs.http4k.core)
+    implementation(libs.http4k.server.netty)
     implementation(libs.http4k.client.okhttp)
     implementation(libs.mordant)
     implementation(libs.google.cloud.secretmanager)

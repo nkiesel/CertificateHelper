@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Certificate Helper GUI</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        label { display: block; margin-top: 10px; }
+        input[type="text"], input[type="number"], select { width: 300px; padding: 5px; margin-top: 5px; }
+        input[type="checkbox"] { margin-right: 5px; }
+        fieldset { margin-top: 20px; padding: 10px; border: 1px solid #ccc; }
+        legend { font-weight: bold; }
+        .button-container { margin-top: 20px; }
+        #resultsOutput {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px dashed #666;
+            background-color: #f9f9f9;
+            white-space: pre-wrap; /* Allows wrapping long lines but preserves whitespace */
+            word-wrap: break-word; /* Breaks long words if necessary */
+            min-height: 50px; /* Ensures it's visible even when empty */
+        }
+    </style>
+</head>
+<body>
+    <h1>Certificate Helper GUI</h1>
+
+    <form id="certForm" action="/processCertificate" method="POST" enctype="multipart/form-data">
+        <fieldset>
+            <legend>Main Input & Format</legend>
+            <div>
+                <label for="inputValue">Input Value (Server/Path/Key/Stdin if blank):</label>
+                <input type="text" id="inputValue" name="inputValue">
+            </div>
+            <div>
+                <label for="inputFormat">Input Format:</label>
+                <select id="inputFormat" name="inputFormat">
+                    <option value="SERVER">SERVER</option>
+                    <option value="JSON">JSON</option>
+                    <option value="PEM">PEM</option>
+                    <option value="BASE64">BASE64</option>
+                    <option value="CONFIG">CONFIG</option>
+                    <option value="SECRET">SECRET</option>
+                </select>
+            </div>
+            <div>
+                <label for="inputFile">Upload File (for PEM, JSON, CONFIG input formats):</label>
+                <input type="file" id="inputFile" name="inputFile">
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Output Format</legend>
+            <div>
+                <label for="outputFormat">Output Format:</label>
+                <select id="outputFormat" name="outputFormat">
+                    <option value="SUMMARY">SUMMARY</option>
+                    <option value="TEXT">TEXT</option>
+                    <option value="PEM">PEM</option>
+                    <option value="BASE64">BASE64</option>
+                </select>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Config Input Options</legend>
+            <div>
+                <input type="checkbox" id="hostName" name="hostName">
+                <label for="hostName" style="display: inline;">Config: Host Name (fetch CA bundle)</label>
+            </div>
+            <div>
+                <input type="checkbox" id="jwe" name="jwe">
+                <label for="jwe" style="display: inline;">Config: JWE (fetch partner JWE info)</label>
+            </div>
+            <div>
+                <input type="checkbox" id="tls" name="tls">
+                <label for="tls" style="display: inline;">Config: TLS (fetch own TLS info)</label>
+            </div>
+            <div>
+                <input type="checkbox" id="bundle" name="bundle">
+                <label for="bundle" style="display: inline;">Config: Bundle (fetch partner CA bundle)</label>
+            </div>
+            <div>
+                <label for="configKey">Config: Key (for JSON/Config file):</label>
+                <input type="text" id="configKey" name="configKey">
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Other Options</legend>
+            <div>
+                <label for="secretName">Secret Name (GCP Secret Manager):</label>
+                <input type="text" id="secretName" name="secretName">
+            </div>
+            <div>
+                <label for="port">Server Port:</label>
+                <input type="number" id="port" name="port" placeholder="443">
+            </div>
+            <div>
+                <label for="certIndex">Certificate Indices (comma-separated, e.g., 0,1):</label>
+                <input type="text" id="certIndex" name="certIndex">
+            </div>
+            <div>
+                <label for="timeout">Server Timeout (e.g., 5s):</label>
+                <input type="text" id="timeout" name="timeout" placeholder="5s">
+            </div>
+            <div>
+                <input type="checkbox" id="verbose" name="verbose">
+                <label for="verbose" style="display: inline;">Verbose Output</label>
+            </div>
+        </fieldset>
+
+        <div class="button-container">
+            <input type="submit" value="Process Certificate">
+        </div>
+    </form>
+
+    <h2>Results:</h2>
+    <pre id="resultsOutput">Output will appear here...</pre>
+
+    <hr style="margin-top: 30px; margin-bottom: 30px;">
+
+    <fieldset>
+        <legend>Root CAs</legend>
+        <div>
+            <label for="rootCAsFilter">List Root CAs (optional regex filter):</label>
+            <input type="text" id="rootCAsFilter" name="rootCAsFilter">
+        </div>
+        <div class="button-container">
+            <button type="button" id="listRootCAsButton">List Root CAs</button>
+        </div>
+    </fieldset>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.getElementById('certForm');
+            const resultsOutput = document.getElementById('resultsOutput');
+            const listRootCAsButton = document.getElementById('listRootCAsButton');
+            const rootCAsFilterInput = document.getElementById('rootCAsFilter');
+
+            form.addEventListener('submit', async function (event) {
+                event.preventDefault(); // Prevent default form submission
+                resultsOutput.textContent = 'Processing...'; // Clear previous results and show loading
+                const formData = new FormData(form);
+                try {
+                    const response = await fetch('/processCertificate', {
+                        method: 'POST',
+                        body: formData // FormData handles enctype automatically
+                    });
+                    const responseText = await response.text();
+                    if (response.ok) {
+                        resultsOutput.textContent = responseText;
+                    } else {
+                        resultsOutput.textContent = `Error: ${response.status} ${response.statusText}\n\n${responseText}`;
+                    }
+                } catch (error) {
+                    console.error('Network error or other issue:', error);
+                    resultsOutput.textContent = `Network Error: ${error.message}. Please check the console for more details.`;
+                }
+            });
+
+            listRootCAsButton.addEventListener('click', async function() {
+                resultsOutput.textContent = 'Fetching Root CAs...';
+                const filterValue = rootCAsFilterInput.value;
+                let url = '/rootCAs';
+                if (filterValue) {
+                    url += '?filter=' + encodeURIComponent(filterValue);
+                }
+                // If filterValue is empty, the backend defaults to ".*"
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'GET'
+                    });
+                    const responseText = await response.text();
+                    if (response.ok) {
+                        resultsOutput.textContent = responseText;
+                    } else {
+                        resultsOutput.textContent = `Error listing Root CAs: ${response.status} ${response.statusText}\n\n${responseText}`;
+                    }
+                } catch (error) {
+                    console.error('Network error or other issue listing Root CAs:', error);
+                    resultsOutput.textContent = `Network Error listing Root CAs: ${error.message}.`;
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>
