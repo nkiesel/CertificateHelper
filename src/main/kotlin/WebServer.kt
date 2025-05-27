@@ -77,9 +77,18 @@ class WebServer(private val port: Int = 8080) {
             val server = formData["server"] ?: ""
             val portStr = formData["port"] ?: "443"
             val outputFormat = formData["outputFormat"] ?: "SUMMARY"
+            val certIndex = formData["certIndex"] ?: ""
 
             val result = if (server.isNotEmpty()) {
-                runCertificateHelper(arrayOf("-f", "SERVER", "-p", portStr, "-t", outputFormat, server))
+                val args = mutableListOf("-f", "SERVER", "-p", portStr, "-t", outputFormat)
+
+                if (certIndex.isNotEmpty()) {
+                    args.add("-c")
+                    args.add(certIndex)
+                }
+
+                args.add(server)
+                runCertificateHelper(args.toTypedArray())
             } else {
                 "Please enter a server name"
             }
@@ -91,13 +100,22 @@ class WebServer(private val port: Int = 8080) {
             val formData = parseFormData(request)
             val pemData = formData["pemData"] ?: ""
             val outputFormat = formData["outputFormat"] ?: "SUMMARY"
+            val certIndex = formData["certIndex"] ?: ""
 
             val result = if (pemData.isNotEmpty()) {
                 // Create a temporary file for the PEM data
                 val tempFile = createTempFile(suffix = ".pem").toFile()
                 try {
                     tempFile.writeText(pemData)
-                    runCertificateHelper(arrayOf("-f", "PEM", "-t", outputFormat, tempFile.absolutePath))
+                    val args = mutableListOf("-f", "PEM", "-t", outputFormat)
+
+                    if (certIndex.isNotEmpty()) {
+                        args.add("-c")
+                        args.add(certIndex)
+                    }
+
+                    args.add(tempFile.absolutePath)
+                    runCertificateHelper(args.toTypedArray())
                 } finally {
                     tempFile.delete()
                 }
@@ -114,12 +132,18 @@ class WebServer(private val port: Int = 8080) {
             val configKey = formData["configKey"] ?: ""
             val outputFormat = formData["outputFormat"] ?: "SUMMARY"
             val option = formData["option"] ?: ""
+            val certIndex = formData["certIndex"] ?: ""
 
             val args = mutableListOf("-f", "CONFIG", "-t", outputFormat)
 
             if (configKey.isNotEmpty()) {
                 args.add("-k")
                 args.add(configKey)
+            }
+
+            if (certIndex.isNotEmpty()) {
+                args.add("-c")
+                args.add(certIndex)
             }
 
             when (option) {

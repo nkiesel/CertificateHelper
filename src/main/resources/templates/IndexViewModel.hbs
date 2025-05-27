@@ -22,7 +22,7 @@
         .tab {
             overflow: hidden;
             border: 1px solid #ccc;
-            background-color: #f1f1f1;
+            background-color: #e0e0e0;
             border-radius: 5px 5px 0 0;
         }
         .tab button {
@@ -34,9 +34,12 @@
             padding: 14px 16px;
             transition: 0.3s;
             font-size: 16px;
+            font-weight: bold;
+            color: #1a1a1a;
+            border-right: 1px solid #ccc;
         }
         .tab button:hover {
-            background-color: #ddd;
+            background-color: #c0c0c0;
         }
         .tab button.active {
             background-color: #3498db;
@@ -98,23 +101,23 @@
     <div class="container">
         <h1>Certificate Helper</h1>
         <p>Web interface for certificate operations</p>
-        
+
         <div class="tab">
             <button class="tablinks active" onclick="openTab(event, 'Server')">Server</button>
             <button class="tablinks" onclick="openTab(event, 'PEM')">PEM</button>
             <button class="tablinks" onclick="openTab(event, 'Config')">Config</button>
         </div>
-        
+
         <!-- Server Tab -->
         <div id="Server" class="tabcontent" style="display: block;">
             <h2>Check Server Certificate</h2>
             <form action="/server" method="post">
                 <label for="server">Server Name:</label>
                 <input type="text" id="server" name="server" placeholder="e.g. github.com" required>
-                
+
                 <label for="port">Port:</label>
                 <input type="number" id="port" name="port" value="443" min="1" max="65535">
-                
+
                 <label for="outputFormat">Output Format:</label>
                 <select id="outputFormat" name="outputFormat">
                     <option value="SUMMARY">Summary</option>
@@ -122,18 +125,21 @@
                     <option value="PEM">PEM</option>
                     <option value="BASE64">BASE64</option>
                 </select>
-                
+
+                <label for="certIndex">Certificate Index:</label>
+                <input type="text" id="certIndex" name="certIndex" placeholder="e.g. 0,1 (leave empty for all certificates)">
+
                 <button type="submit">Check Certificate</button>
             </form>
         </div>
-        
+
         <!-- PEM Tab -->
         <div id="PEM" class="tabcontent">
             <h2>Check PEM Certificate</h2>
             <form action="/pem" method="post">
                 <label for="pemData">PEM Data:</label>
                 <textarea id="pemData" name="pemData" placeholder="Paste PEM certificate data here..." required></textarea>
-                
+
                 <label for="outputFormat">Output Format:</label>
                 <select id="outputFormat" name="outputFormat">
                     <option value="SUMMARY">Summary</option>
@@ -141,38 +147,41 @@
                     <option value="PEM">PEM</option>
                     <option value="BASE64">BASE64</option>
                 </select>
-                
+
+                <label for="certIndex">Certificate Index:</label>
+                <input type="text" id="certIndex" name="certIndex" placeholder="e.g. 0,1 (leave empty for all certificates)">
+
                 <button type="submit">Check Certificate</button>
             </form>
         </div>
-        
+
         <!-- Config Tab -->
         <div id="Config" class="tabcontent">
             <h2>Check Config Certificate</h2>
             <form action="/config" method="post">
                 <label for="configData">Config Data (JSON):</label>
                 <textarea id="configData" name="configData" placeholder="Paste JSON configuration data here..." required></textarea>
-                
+
                 <label for="configKey">Config Key:</label>
                 <input type="text" id="configKey" name="configKey" placeholder="e.g. partners.example" required>
-                
+
                 <div class="option-group">
                     <label>Options:</label>
                     <div>
                         <input type="radio" id="hostName" name="option" value="hostName">
                         <label for="hostName" class="radio-option">Host Name</label>
-                        
+
                         <input type="radio" id="jwe" name="option" value="jwe">
                         <label for="jwe" class="radio-option">JWE</label>
-                        
+
                         <input type="radio" id="tls" name="option" value="tls">
                         <label for="tls" class="radio-option">TLS</label>
-                        
+
                         <input type="radio" id="bundle" name="option" value="bundle">
                         <label for="bundle" class="radio-option">Bundle</label>
                     </div>
                 </div>
-                
+
                 <label for="outputFormat">Output Format:</label>
                 <select id="outputFormat" name="outputFormat">
                     <option value="SUMMARY">Summary</option>
@@ -180,12 +189,15 @@
                     <option value="PEM">PEM</option>
                     <option value="BASE64">BASE64</option>
                 </select>
-                
+
+                <label for="certIndex">Certificate Index:</label>
+                <input type="text" id="certIndex" name="certIndex" placeholder="e.g. 0,1 (leave empty for all certificates)">
+
                 <button type="submit">Check Certificate</button>
             </form>
         </div>
     </div>
-    
+
     <script>
         function openTab(evt, tabName) {
             var i, tabcontent, tablinks;
