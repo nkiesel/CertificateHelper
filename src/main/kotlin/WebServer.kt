@@ -27,16 +27,7 @@ class WebServer(private val port: Int = 8080) {
 
     // Run CertificateHelper with the given args
     private fun runCertificateHelper(args: Array<String>): String {
-        val command = mutableListOf("java", "-jar")
-
-        // Find the jar file in the build directory
-        val jarFile = File("build/libs").listFiles()
-            ?.filter { it.name.endsWith(".jar") && !it.name.contains("sources") }
-            ?.maxByOrNull { it.lastModified() }
-            ?.absolutePath
-            ?: return "Error: Could not find CertificateHelper JAR file"
-
-        command.add(jarFile)
+        val command = mutableListOf("java", "-cp", "libs/*", "CertificateHelperKt")
         command.addAll(args.toList())
 
         val process = ProcessBuilder(command)

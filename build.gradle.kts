@@ -10,6 +10,7 @@ plugins {
     alias(libs.plugins.versions.filter)
     alias(libs.plugins.versions.update)
     alias(libs.plugins.docker)
+    alias(libs.plugins.shadow)
     application
 }
 
@@ -47,24 +48,6 @@ tasks.withType<Test>().configureEach {
     useJUnitPlatform()
 }
 
-tasks.register<Jar>("uberJar") {
-    archiveClassifier = "uber"
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    manifest { attributes(mapOf(
-        "Main-Class" to application.mainClass,
-        "Implementation-Version" to version,
-    )) }
-
-    from(sourceSets.main.get().output)
-
-    dependsOn(configurations.runtimeClasspath)
-    from({
-        configurations.runtimeClasspath.get().filter { it.name.endsWith(".jar") }.map { zipTree(it) }
-    }) {
-        exclude("META-INF/*.RSA", "META-INF/*.SF", "META-INF/*.DSA")
-    }
-}
-
 val versionFile: Path = layout.buildDirectory.file("generated/version").get().asFile.toPath()
 
 sourceSets {
@@ -98,7 +81,7 @@ docker {
         jvmArgs.set(listOf("-Xms256m", "-Xmx512m"))
 
         // Use the uberJar task output
-        mainClassName.set(application.mainClass.get())
+//        mainClassName.set(application.mainClass.get())
 
         // Set the command to run the web server on port 8080
         args.set(listOf("--web", "8080"))
@@ -107,14 +90,12 @@ docker {
 
 // Configure Docker to use the uberJar instead of the standard jar
 tasks.withType<com.bmuschko.gradle.docker.tasks.image.DockerBuildImage>().configureEach {
-    dependsOn("uberJar")
+    dependsOn("jar")
 
     doFirst {
-        // Copy the uberJar to the Docker build directory
         copy {
-            from(tasks.named("uberJar"))
-            rename { "app.jar" }
-            into("${buildDir}/docker/build")
+            from(layout.buildDirectory.dir("libs").get().asFile)
+            into(layout.buildDirectory.dir("docker/libs").get().asFile)
         }
     }
 }
