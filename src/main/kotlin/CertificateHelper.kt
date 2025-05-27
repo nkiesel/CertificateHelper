@@ -143,6 +143,7 @@ class CertificateHelper : CliktCommand(name = "ch") {
     ```
     ch -f server api.github.com
     ch -f pem my_cert.pem
+    ch --web 8080
     ```
     """.trimIndent()
 
@@ -176,6 +177,7 @@ class CertificateHelper : CliktCommand(name = "ch") {
         .convert { Duration.parse(it) }.default(5.seconds)
     private val rootCAs by option("--rootCAs", help = "list root CAs, filter with optional regex").optionalValue(".*")
     private val verbose by option("-v", "--verbose", help = "more verbose output").flag()
+    private val webServer by option("--web", help = "Start web server on specified port").int()
     private val inputArgument by argument("input", help = "Input file or server name; - for stdin").default("")
     private lateinit var input: String
     private var useStdin: Boolean = true
@@ -201,6 +203,13 @@ class CertificateHelper : CliktCommand(name = "ch") {
     }
 
     override fun run() {
+        // Start web server if requested
+        webServer?.let { port ->
+            println("Starting web server on port $port...")
+            WebServer(port).start()
+            return
+        }
+
         val pattern = rootCAs?.toRegex()
         if (pattern != null) {
             for (cert in rootCertificates.filter { it.key.toString().contains(pattern) }) {
