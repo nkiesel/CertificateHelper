@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.versions)
     alias(libs.plugins.versions.filter)
     alias(libs.plugins.versions.update)
+    alias(libs.plugins.docker)
     application
 }
 
@@ -85,4 +86,35 @@ tasks.register("generateVersionProperties") {
 
 tasks.named("processResources") {
     dependsOn("generateVersionProperties")
+}
+
+// Docker configuration
+docker {
+    javaApplication {
+        baseImage.set("eclipse-temurin:21-jre-alpine")
+        maintainer.set("nkiesel.org")
+        ports.set(listOf(8080))
+        images.set(listOf("nkiesel/certificate-helper:${project.version}", "nkiesel/certificate-helper:latest"))
+        jvmArgs.set(listOf("-Xms256m", "-Xmx512m"))
+
+        // Use the uberJar task output
+        mainClassName.set(application.mainClass.get())
+
+        // Set the command to run the web server on port 8080
+        args.set(listOf("--web", "8080"))
+    }
+}
+
+// Configure Docker to use the uberJar instead of the standard jar
+tasks.withType<com.bmuschko.gradle.docker.tasks.image.DockerBuildImage>().configureEach {
+    dependsOn("uberJar")
+
+    doFirst {
+        // Copy the uberJar to the Docker build directory
+        copy {
+            from(tasks.named("uberJar"))
+            rename { "app.jar" }
+            into("${buildDir}/docker/build")
+        }
+    }
 }

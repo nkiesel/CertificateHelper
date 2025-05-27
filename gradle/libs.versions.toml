@@ -1,5 +1,6 @@
 [versions]
 clikt = "5.0.3"
+docker = "9.4.0"
 gcsm = "2.63.0"
 http4k = "6.10.0.0"
 junit5 = "5.12.2"
@@ -23,6 +24,7 @@ kotlin-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-j
 mordant = { module = "com.github.ajalt.mordant:mordant", version.ref = "mordant" }
 
 [plugins]
+docker = { id = "com.bmuschko.docker-java-application", version.ref = "docker" }
 versions = { id = "com.github.ben-manes.versions", version.ref = "plugin-versions" }
 versions-filter = { id = "se.ascp.gradle.gradle-versions-filter", version.ref = "plugin-versionsFilter" }
 versions-update = { id = "nl.littlerobots.version-catalog-update", version.ref = "plugin-versionsUpdate" }

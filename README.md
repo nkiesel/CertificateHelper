@@ -28,6 +28,8 @@ incompatible version, try `$JAVA_HOME/bin/java -jar build/libs/*.jar --help`.
 
 ## Usage
 
+### Command Line
+
 Typical use case is to first look at a certificate chain for a server using the following command (replace
 `api.github.com` with the name of the server you are interested in):
 ```shell
@@ -87,6 +89,32 @@ ch -i config/dev.json -k github
 If you are only interested in a single certificate instead of the whole certificate chain, then you can use the 
 `--certIndex` option to select that certificate. The leaf certificate always has index 0.  Thus, to only get the 
 leaf certificate from a server, add `-c 0`, and use `-c0,3` to get the 1st and 4th certificate in a chain.
+
+### Docker
+
+You can also run CertificateHelper as a Docker container. This is especially useful for running the web interface without installing Java on your local machine.
+
+#### Building the Docker Image
+
+To build the Docker image, run:
+
+```shell
+./gradlew dockerBuildImage
+```
+
+This will create a Docker image named `nkiesel/certificate-helper` with tags for the current version and `latest`.
+
+#### Running the Docker Container
+
+To run the web interface on port 8080:
+
+```shell
+docker run -p 8080:8080 nkiesel/certificate-helper:latest
+```
+
+This will start the web server and make it accessible at http://localhost:8080 in your browser.
+
+### Command Line Options
 
 Run `ch --help` to see all the options:
 ```text
