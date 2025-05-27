@@ -4,7 +4,7 @@ import kotlin.io.path.writeText
 
 plugins {
     val kotlinVersion = "2.1.20"
-    kotlin("jvm") version kotlinVersion
+    kotlin("multiplatform") version kotlinVersion
     kotlin("plugin.serialization") version kotlinVersion
     alias(libs.plugins.versions)
     alias(libs.plugins.versions.filter)
@@ -21,21 +21,55 @@ repositories {
 }
 
 dependencies {
-    implementation(libs.clikt)
-    implementation(libs.clikt.markdown)
-    implementation(libs.kotlin.serialization)
-    implementation(libs.http4k.core)
-    implementation(libs.http4k.client.okhttp)
-    implementation(libs.http4k.server.netty)
-    implementation(libs.http4k.template.handlebars)
-    implementation(libs.mordant)
-    implementation(libs.google.cloud.secretmanager)
-
+    // Test dependencies remain at the root level
     testImplementation(libs.junit.bom)
     testImplementation(libs.junit.jupiter)
 }
 
 kotlin {
+    jvm {
+        withJava()
+        compilations.all {
+            kotlinOptions.jvmTarget = "21"
+        }
+    }
+
+    macosArm64 {
+        binaries {
+            executable {
+                entryPoint = "main"
+                baseName = "certificate-helper"
+            }
+        }
+    }
+
+    sourceSets {
+        val commonMain by getting {
+            dependencies {
+                implementation(libs.kotlin.serialization)
+                implementation(libs.clikt)
+                implementation(libs.mordant)
+            }
+        }
+
+        val jvmMain by getting {
+            dependencies {
+                implementation(libs.clikt.markdown)
+                implementation(libs.http4k.core)
+                implementation(libs.http4k.client.okhttp)
+                implementation(libs.http4k.server.netty)
+                implementation(libs.http4k.template.handlebars)
+                implementation(libs.google.cloud.secretmanager)
+            }
+        }
+
+        val macosArm64Main by getting {
+            dependencies {
+                // Native-specific dependencies can be added here
+            }
+        }
+    }
+
     jvmToolchain(21)
 }
 
@@ -86,6 +120,14 @@ tasks.register("generateVersionProperties") {
 
 tasks.named("processResources") {
     dependsOn("generateVersionProperties")
+}
+
+// Native compilation task
+tasks.register("nativeBuild") {
+    dependsOn("macosArm64Binaries")
+    doLast {
+        println("Native binary built at: ${layout.buildDirectory.get()}/bin/macosArm64/releaseExecutable/certificate-helper.kexe")
+    }
 }
 
 // Docker configuration

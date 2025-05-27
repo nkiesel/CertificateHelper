@@ -90,6 +90,28 @@ If you are only interested in a single certificate instead of the whole certific
 `--certIndex` option to select that certificate. The leaf certificate always has index 0.  Thus, to only get the 
 leaf certificate from a server, add `-c 0`, and use `-c0,3` to get the 1st and 4th certificate in a chain.
 
+### Native Build (macOS ARM64)
+
+You can build a native executable for macOS ARM64 using Kotlin Native:
+
+```shell
+./gradlew nativeBuild
+```
+
+This will create a native executable at `build/bin/macosArm64/releaseExecutable/certificate-helper.kexe`. You can run it directly:
+
+```shell
+build/bin/macosArm64/releaseExecutable/certificate-helper.kexe
+```
+
+For convenience, you can also use the provided script to build and run the native version:
+
+```shell
+./native_build_kotlin
+```
+
+Note that the native version currently has limited functionality compared to the JVM version.
+
 ### Docker
 
 You can also run CertificateHelper as a Docker container. This is especially useful for running the web interface without installing Java on your local machine.

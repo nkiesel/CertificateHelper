@@ -1,0 +1,25 @@
+#!/bin/zsh
+
+# Build the native executable using Kotlin Native
+./gradlew nativeBuild
+
+# Check if the build was successful
+if [ $? -ne 0 ]; then
+  echo "Build failed"
+  exit 1
+fi
+
+# Path to the native executable
+NATIVE_EXE="build/bin/macosArm64/releaseExecutable/certificate-helper.kexe"
+
+# Check if the executable exists
+if [ ! -f "$NATIVE_EXE" ]; then
+  echo "Native executable not found at $NATIVE_EXE"
+  exit 1
+fi
+
+echo "Native executable built successfully at $NATIVE_EXE"
+echo "Running the native executable..."
+
+# Run the native executable
+"$NATIVE_EXE" "$@"
