@@ -3,11 +3,8 @@ import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
 plugins {
-    val kotlinVersion = "2.1.20"
-    kotlin("jvm") version kotlinVersion
-    kotlin("plugin.serialization") version kotlinVersion
-    alias(libs.plugins.versions)
-    alias(libs.plugins.versions.filter)
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.versions.update)
     alias(libs.plugins.docker)
     alias(libs.plugins.shadow)
@@ -24,7 +21,7 @@ repositories {
 dependencies {
     implementation(libs.clikt)
     implementation(libs.clikt.markdown)
-    implementation(libs.kotlin.serialization)
+    implementation(libs.kotlin.serialization.json)
     implementation(libs.http4k.core)
     implementation(libs.http4k.client.okhttp)
     implementation(libs.http4k.server.netty)

@@ -1,15 +1,14 @@
 [versions]
 clikt = "5.0.3"
 docker = "9.4.0"
-gcsm = "2.63.0"
-http4k = "6.10.0.0"
-junit5 = "5.12.2"
+gcsm = "2.68.0"
+http4k = "6.15.1.0"
+junit5 = "5.13.4"
+kotlin = "2.2.0"
 mordant = "3.0.2"
-plugin-versions = "0.52.0"
-plugin-versionsFilter = "0.1.16"
+plugin-shadow = "9.0.0-rc2"
 plugin-versionsUpdate = "1.0.0"
-plugin-shadow = "9.0.0-beta13"
-serialization = "1.8.1"
+serialization-json = "1.9.0"
 
 [libraries]
 clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }
@@ -20,13 +19,13 @@ http4k-core = { module = "org.http4k:http4k-core", version.ref = "http4k" }
 http4k-server-netty = { module = "org.http4k:http4k-server-netty", version.ref = "http4k" }
 http4k-template-handlebars = { module = "org.http4k:http4k-template-handlebars", version.ref = "http4k" }
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit5" }
-junit-jupiter = "org.junit.jupiter:junit-jupiter:5.12.2"
-kotlin-serialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit5" }
+kotlin-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization-json" }
 mordant = { module = "com.github.ajalt.mordant:mordant", version.ref = "mordant" }
 
 [plugins]
 docker = { id = "com.bmuschko.docker-java-application", version.ref = "docker" }
-versions = { id = "com.github.ben-manes.versions", version.ref = "plugin-versions" }
-versions-filter = { id = "se.ascp.gradle.gradle-versions-filter", version.ref = "plugin-versionsFilter" }
-versions-update = { id = "nl.littlerobots.version-catalog-update", version.ref = "plugin-versionsUpdate" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 shadow = { id = "com.gradleup.shadow", version.ref = "plugin-shadow" }
+versions-update = { id = "nl.littlerobots.version-catalog-update", version.ref = "plugin-versionsUpdate" }
