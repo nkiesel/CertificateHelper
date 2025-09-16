@@ -5,7 +5,7 @@ if [[ -z $GRAALVM_HOME ]]; then
   exit 1
 fi
 
-list=(build/libs/CertificateHelper-*-uber.jar)
+list=(build/libs/CertificateHelper-*-all.jar)
 jar=${list[-1]}
 
 if [[ -z $jar ]]; then
