@@ -547,7 +547,6 @@ class CertificateHelper : CliktCommand(name = "ch") {
                 println("\n${prefix}X509 v$version ${selfSigned}${root}certificate for ${cn(subjectX500Principal)}")
                 println("\tCertificate fingerprint: $fingerprint")
                 println("\tPublic key fingerprint: ${publicKey.encoded.fingerprint()}")
-                if (verbose) println("\tSerial number: $serialNumber")
                 val now = Instant.now()
                 val notBeforeInstant = notBefore.toInstant()
                 if (notBeforeInstant > now) {
@@ -560,6 +559,10 @@ class CertificateHelper : CliktCommand(name = "ch") {
                     println("\tExpires: $notAfterInstant")
                 }
                 println("\tIssuer: ${cn(issuerX500Principal)}")
+                if (verbose) {
+                    println("\tSerial number: $serialNumber")
+                    println("\tSubject: $subjectX500Principal")
+                }
                 // All the remaining properties can be `null`
                 if (keyUsage.hasContent()) {
                     println("\tKey Usage: ${keyUsage(keyUsage)}")
