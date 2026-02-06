@@ -14,14 +14,7 @@ import com.github.ajalt.mordant.terminal.Terminal
 import com.google.cloud.secretmanager.v1.ProjectName
 import com.google.cloud.secretmanager.v1.SecretManagerServiceClient
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import org.http4k.client.OkHttp
-import org.http4k.client.PreCannedOkHttpClients
-import org.http4k.core.Method
-import org.http4k.core.Request
-import org.http4k.core.Uri
-import org.http4k.core.appendToPath
 import java.io.InputStream
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -416,6 +409,7 @@ class CertificateHelper : CliktCommand(name = "ch") {
                     value.base64Decode().inputStream()
                 )
             }
+
             bundle -> chain(input, partner.tls.caBundleBase64?.base64Decode()?.inputStream())
         }
     }
@@ -509,11 +503,32 @@ class CertificateHelper : CliktCommand(name = "ch") {
     }
 
     private fun certificateSummary(cert: X509Certificate, name: String? = null) {
+        val separator = "\n\t\t"
+
         fun altName(altName: List<*>, type: Int) = (altName[1] as String).takeIf { altName[0] as Int == type }
 
         fun dns(altNames: List<*>) = altName(altNames, 2)
 
         fun email(altNames: List<*>) = altName(altNames, 1)
+
+        fun subjectAltName(altName: List<*>): String {
+            val type = altName[0] as Int
+            val value = altName[1] as String
+            val name = when (type) {
+                0 -> "Other name"
+                1 -> "Email address"
+                2 -> "DNS hostname"
+                3 -> "X.400 address"
+                4 -> "Directory name"
+                5 -> "EDI party name"
+                6 -> "Uniform Resource Identifier (URI)"
+                7 -> "IP address (version 6)"
+                8 -> "Registered ID"
+                else -> type.toString()
+            }
+
+            return "$name: $value"
+        }
 
         fun cn(principal: X500Principal) = principal.name.let { name ->
             LdapName(name).rdns.find { it.type == "CN" }?.value ?: name
@@ -526,7 +541,6 @@ class CertificateHelper : CliktCommand(name = "ch") {
         fun extKeyUsage(data: List<String>): String {
             val transform: (String) -> String = { extendedKeyUsages[it]?.toString(it, verbose) ?: it }
             return if (verbose) {
-                val separator = "\n\t\t"
                 data.joinToString(separator, prefix = separator, transform = transform)
             } else {
                 data.joinToString(transform = transform)
@@ -544,7 +558,7 @@ class CertificateHelper : CliktCommand(name = "ch") {
                 }
                 val selfSigned = if (subjectX500Principal == issuerX500Principal) "self-signed " else ""
                 val prefix = if (name.isNullOrEmpty()) "" else "$name: "
-                println("\n${prefix}X509 v$version ${selfSigned}${root}certificate for ${cn(subjectX500Principal)}")
+                println("\n${prefix}X509 v$version ${selfSigned}${root}certificate for \"${cn(subjectX500Principal)}\"")
                 println("\tCertificate fingerprint: $fingerprint")
                 println("\tPublic key fingerprint: ${publicKey.encoded.fingerprint()}")
                 val now = Instant.now()
@@ -570,13 +584,23 @@ class CertificateHelper : CliktCommand(name = "ch") {
                 if (extendedKeyUsage.hasContent()) {
                     println("\tExtended Key Usage: ${extKeyUsage(extendedKeyUsage)}")
                 }
-                val dnsNames = subjectAlternativeNames?.mapNotNull { dns(it) }?.joinToString()
-                if (dnsNames.hasContent()) {
-                    println("\tDNS names: $dnsNames")
-                }
-                val emails = subjectAlternativeNames?.mapNotNull { email(it) }?.joinToString()
-                if (emails.hasContent()) {
-                    println("\tEmails: $emails")
+                if (subjectAlternativeNames != null) {
+                    if (verbose) {
+                        val altNames = subjectAlternativeNames.mapNotNull { subjectAltName(it) }
+                            .joinToString(separator, prefix = separator)
+                        if (altNames.hasContent()) {
+                            println("\tSubject Alternative Names: $altNames")
+                        }
+                    } else {
+                        val dnsNames = subjectAlternativeNames.mapNotNull { dns(it) }.joinToString()
+                        if (dnsNames.hasContent()) {
+                            println("\tDNS names: $dnsNames")
+                        }
+                        val emails = subjectAlternativeNames.mapNotNull { email(it) }.joinToString()
+                        if (emails.hasContent()) {
+                            println("\tEmails: $emails")
+                        }
+                    }
                 }
             }
         }
