@@ -78,6 +78,18 @@ private val keyUsages = mapOf(
     8 to "Decipher only",
 )
 
+private val subjectAltNames = mapOf(
+    0 to "Other name",
+    1 to "Email address",
+    2 to "DNS hostname",
+    3 to "X.400 address",
+    4 to "Directory name",
+    5 to "EDI party name",
+    6 to "Uniform Resource Identifier (URI)",
+    7 to "IP address (version 6)",
+    8 to "Registered ID",
+)
+
 private class EKP(val name: String, val description: String) {
     fun toString(key: String, verbose: Boolean) = if (verbose) "$name: $description ($key)" else name
 }
@@ -514,19 +526,7 @@ class CertificateHelper : CliktCommand(name = "ch") {
         fun subjectAltName(altName: List<*>): String {
             val type = altName[0] as Int
             val value = altName[1] as String
-            val name = when (type) {
-                0 -> "Other name"
-                1 -> "Email address"
-                2 -> "DNS hostname"
-                3 -> "X.400 address"
-                4 -> "Directory name"
-                5 -> "EDI party name"
-                6 -> "Uniform Resource Identifier (URI)"
-                7 -> "IP address (version 6)"
-                8 -> "Registered ID"
-                else -> type.toString()
-            }
-
+            val name = subjectAltNames[type] ?: type.toString()
             return "$name: $value"
         }
 
