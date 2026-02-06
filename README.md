@@ -8,20 +8,20 @@ file (optionally Base64 encoded).
 
 ## Installation
 
-The code is built using Java 17 and thus requires Java 17 or higher to execute it. Some examples on how to install 
+The code is built using Java 25 and thus requires Java 25 or higher to execute it. Some examples on how to install 
 if it is missing:
- - Debian: `apt install openjdk-17-jdk`
- - MacOS: `brew install openjdk@17`
+ - Debian: `apt install openjdk-25-jdk`
+ - MacOS: `brew install openjdk@25`
 
 If you install it, then this also often requires to set the JAVA_HOME environment variable correctly:
 ```shell
 # for Debian
-export JAVA_HOME=/var/lib/jdk/openjdk-17
+export JAVA_HOME=/var/lib/jdk/openjdk-25
 # for MacOS
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-17.jdk/Contents/Home
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-25.jdk/Contents/Home
 ```
 
-Once you have Java 17 installed, you can build the Jar using `./gradlew clean uber` to generate an "uber" (or "fat") 
+Once you have Java 25 installed, you can build the Jar using `./gradlew clean shadowJar` to generate an "all" (or "fat") 
 jar (which includes all the 3rd party dependencies). This will produce a single jar file in `build/libs`.  You can
 then test the build running `java -jar build/libs/*.jar --help`. If this complains about Java not found or being an 
 incompatible version, try `$JAVA_HOME/bin/java -jar build/libs/*.jar --help`.
@@ -33,12 +33,12 @@ incompatible version, try `$JAVA_HOME/bin/java -jar build/libs/*.jar --help`.
 Typical use case is to first look at a certificate chain for a server using the following command (replace
 `api.github.com` with the name of the server you are interested in):
 ```shell
-$JAVA_HOME/bin/java -jar build/libs/CertificateHelper-*-uber.jar -f server -i api.github.com
+$JAVA_HOME/bin/java -jar build/libs/CertificateHelper-*-all.jar -f server -i api.github.com
 ```
 To simplify the command, consider defining a Shell function (for Bash or Zsh). Assuming you are in the top-level
 directory of the cloned repository, use
 ```shell
-jar=$(realpath build/libs/*-uber.jar)
+jar=$(realpath build/libs/*-all.jar)
 function ch {
   typeset -g ch_jar
   : ${ch_jar:=$jar}

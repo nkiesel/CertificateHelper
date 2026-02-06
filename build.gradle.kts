@@ -34,7 +34,7 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
 
 application {
@@ -77,7 +77,7 @@ docker {
         images.set(listOf("nkiesel/certificate-helper:${project.version}", "nkiesel/certificate-helper:latest"))
         jvmArgs.set(listOf("-Xms256m", "-Xmx512m"))
 
-        // Use the uberJar task output
+        // Use the shadowJar task output
 //        mainClassName.set(application.mainClass.get())
 
         // Set the command to run the web server on port 8080
@@ -85,7 +85,7 @@ docker {
     }
 }
 
-// Configure Docker to use the uberJar instead of the standard jar
+// Configure Docker to use the shadowJar instead of the standard jar
 tasks.withType<com.bmuschko.gradle.docker.tasks.image.DockerBuildImage>().configureEach {
     dependsOn("jar")
 

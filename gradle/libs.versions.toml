@@ -1,14 +1,14 @@
 [versions]
-clikt = "5.0.3"
-docker = "9.4.0"
-gcsm = "2.74.0"
-http4k = "6.18.0.1"
-junit5 = "5.13.4"
-kotlin = "2.2.20"
+clikt = "5.1.0"
+docker = "10.0.0"
+gcsm = "2.83.0"
+http4k = "6.27.0.0"
+junit5 = "6.0.2"
+kotlin = "2.3.10"
 mordant = "3.0.2"
-plugin-shadow = "9.1.0"
-plugin-versionsUpdate = "1.0.0"
-serialization-json = "1.9.0"
+plugin-shadow = "9.3.1"
+plugin-versionsUpdate = "1.0.1"
+serialization-json = "1.10.0"
 
 [libraries]
 clikt = { module = "com.github.ajalt.clikt:clikt", version.ref = "clikt" }

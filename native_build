@@ -9,7 +9,7 @@ list=(build/libs/CertificateHelper-*-all.jar)
 jar=${list[-1]}
 
 if [[ -z $jar ]]; then
-  echo 'First build the JAR file using `./gradlew uber`'
+  echo 'First build the JAR file using `./gradlew shadowJar`'
   exit 1
 fi
 
